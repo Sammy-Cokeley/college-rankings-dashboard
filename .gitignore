@@ -1,0 +1,19 @@
+# Go build output
+*.exe
+*.test
+*.out
+/pipeline/pipeline
+
+# SQLite databases (built locally; never committed)
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+
+# Local Claude Code config (machine-specific) + tool artifacts
+.claude/settings.local.json
+.playwright-mcp/
+
+# Editor / OS cruft
+.DS_Store
+Thumbs.db
