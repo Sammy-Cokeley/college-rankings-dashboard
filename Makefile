@@ -5,7 +5,7 @@
 
 DB ?= rankings.db
 
-.PHONY: migrate seed test scrape
+.PHONY: migrate seed test scrape resolve
 
 migrate:
 	cd pipeline && go run ./cmd/migrate -db=../$(DB) -dir=../db/migrations
@@ -16,5 +16,12 @@ seed:
 test:
 	cd pipeline && go test ./...
 
+# Ingest a FloWrestling season container. Defaults to the committed offline
+# fixture so this runs with no network; pass URL=... for a live page and
+# SEASON=2026 to override the inferred season.
 scrape:
-	@echo "not implemented — pending Flo recon"
+	cd pipeline && go run ./cmd/scrape -db=../$(DB) $(if $(URL),-url=$(URL),) $(if $(SEASON),-season=$(SEASON),)
+
+# Second pass: reconcile raw name+school strings to canonical wrestlers.
+resolve:
+	cd pipeline && go run ./cmd/resolve -db=../$(DB)
