@@ -120,6 +120,53 @@ func TestContainer_Idempotent(t *testing.T) {
 	}
 }
 
+// A single malformed edition must be isolated: it lands in Result.Failures
+// while every other edition still ingests. (Tie ranks are the documented real
+// case; a duplicate-rank table is the same failure class and easy to construct.)
+func TestContainer_IsolatesBadEdition(t *testing.T) {
+	ctx := context.Background()
+	db := newDB(t)
+
+	good := `<table><tbody>
+<tr><td>Rank</td><td>Grade</td><td>Name</td><td>School</td></tr>
+<tr><td>1</td><td>SO</td><td>Vincent Robinson</td><td>NC State</td></tr></tbody></table>`
+	// Tie rank: violates UNIQUE(snapshot_id, rank) at ingest time.
+	tie := `<table><tbody>
+<tr><td>Rank</td><td>Grade</td><td>Name</td><td>School</td></tr>
+<tr><td>1</td><td>SO</td><td>Wrestler A</td><td>Iowa</td></tr>
+<tr><td>1</td><td>JR</td><td>Wrestler B</td><td>Ohio State</td></tr></tbody></table>`
+
+	c := scraper.Container{
+		ID:    1,
+		Title: "2025-26 NCAA DI Wrestling Rankings",
+		RankingSections: map[string][]scraper.Edition{
+			"2":  {{Name: "125", PublishDate: "2025-09-29", Content: good}},
+			"11": {{Name: "285", PublishDate: "2025-09-29", Content: tie}},
+		},
+	}
+
+	res, err := Container(ctx, db, c, 2026, time.Now())
+	if err != nil {
+		t.Fatalf("Container should not hard-error on a per-edition failure: %v", err)
+	}
+	if res.SnapshotsCreated != 1 {
+		t.Errorf("snapshots created = %d, want 1 (the good edition)", res.SnapshotsCreated)
+	}
+	if len(res.Failures) != 1 {
+		t.Fatalf("failures = %d, want 1", len(res.Failures))
+	}
+	if res.Failures[0].WeightClass != 285 {
+		t.Errorf("failed edition weight = %d, want 285", res.Failures[0].WeightClass)
+	}
+	// Good edition persisted; failed one left nothing behind.
+	if got := count(t, db, `SELECT COUNT(*) FROM snapshots`); got != 1 {
+		t.Errorf("snapshots in db = %d, want 1", got)
+	}
+	if got := count(t, db, `SELECT COUNT(*) FROM ranking_entries`); got != 1 {
+		t.Errorf("entries in db = %d, want 1", got)
+	}
+}
+
 func count(t *testing.T, db *sql.DB, query string) int {
 	t.Helper()
 	var n int
