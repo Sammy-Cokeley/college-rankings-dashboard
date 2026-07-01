@@ -185,6 +185,42 @@ func TestRankingEntries_RejectExactDuplicateRow(t *testing.T) {
 	}
 }
 
+// Two entries tied at one rank must come back in a stable order (rank, then
+// raw_source_string), not SQLite's arbitrary order for equal ranks — so SSR
+// output and tests are deterministic (schema.md §7). Insert B before A to prove
+// the query sorts rather than echoing insertion order.
+func TestListEntries_TieRankStableOrder(t *testing.T) {
+	ctx := context.Background()
+	db := freshDB(t)
+	sourceID, _ := SourceID(ctx, db, "FloWrestling")
+
+	snapID, err := InsertSnapshot(ctx, db, Snapshot{
+		SourceID: sourceID, WeightClass: 197, Season: 2026,
+		PublishedDate: "2026-03-27", CapturedAt: "2026-06-29T00:00:00Z",
+	})
+	if err != nil {
+		t.Fatalf("insert snapshot: %v", err)
+	}
+	for _, name := range []string{"Wrestler B", "Wrestler A"} { // reverse order
+		if _, err := InsertRankingEntry(ctx, db,
+			RankingEntry{SnapshotID: snapID, Rank: 21, RawSourceString: name}); err != nil {
+			t.Fatalf("insert %q: %v", name, err)
+		}
+	}
+
+	entries, err := ListEntries(ctx, db, snapID)
+	if err != nil {
+		t.Fatalf("list entries: %v", err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("entries = %d, want 2", len(entries))
+	}
+	if entries[0].RawSourceString != "Wrestler A" || entries[1].RawSourceString != "Wrestler B" {
+		t.Errorf("tie order = [%q, %q], want [Wrestler A, Wrestler B]",
+			entries[0].RawSourceString, entries[1].RawSourceString)
+	}
+}
+
 func countRows(t *testing.T, db *sql.DB, query string) int {
 	t.Helper()
 	var n int

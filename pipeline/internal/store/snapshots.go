@@ -83,11 +83,14 @@ func GetSnapshot(ctx context.Context, db *sql.DB, id int64) (Snapshot, error) {
 	return s, nil
 }
 
-// ListEntries reads all entries for a snapshot, ordered by rank.
+// ListEntries reads all entries for a snapshot, ordered by rank then
+// raw_source_string — the latter keeps a tie (two entries sharing a rank; see
+// schema.md §7) in a stable, deterministic order rather than SQLite's arbitrary
+// order for equal keys.
 func ListEntries(ctx context.Context, db *sql.DB, snapshotID int64) ([]RankingEntry, error) {
 	rows, err := db.QueryContext(ctx,
 		`SELECT id, snapshot_id, wrestler_id, rank, raw_source_string, raw_school, raw_grade
-		 FROM ranking_entries WHERE snapshot_id = ? ORDER BY rank`, snapshotID)
+		 FROM ranking_entries WHERE snapshot_id = ? ORDER BY rank, raw_source_string`, snapshotID)
 	if err != nil {
 		return nil, fmt.Errorf("list entries for snapshot %d: %w", snapshotID, err)
 	}
@@ -106,7 +109,8 @@ func ListEntries(ctx context.Context, db *sql.DB, snapshotID int64) ([]RankingEn
 
 // MovementForWeight returns every entry for one source/weight/season with the
 // wrestler's previous rank attached via LAG over published_date (schema.md §5).
-// Rows are ordered by published_date then rank.
+// Rows are ordered by published_date, then rank, then raw_source_string — the
+// last tiebreaker keeps a tie rank (schema.md §7) deterministically ordered.
 func MovementForWeight(ctx context.Context, db *sql.DB, sourceID int64, weightClass, season int) ([]Movement, error) {
 	rows, err := db.QueryContext(ctx, `
 SELECT e.snapshot_id, s.published_date, e.wrestler_id, e.rank,
@@ -118,7 +122,7 @@ SELECT e.snapshot_id, s.published_date, e.wrestler_id, e.rank,
 FROM ranking_entries e
 JOIN snapshots s ON s.id = e.snapshot_id
 WHERE s.source_id = ? AND s.weight_class = ? AND s.season = ?
-ORDER BY s.published_date, e.rank`,
+ORDER BY s.published_date, e.rank, e.raw_source_string`,
 		sourceID, weightClass, season)
 	if err != nil {
 		return nil, fmt.Errorf("movement query: %w", err)
