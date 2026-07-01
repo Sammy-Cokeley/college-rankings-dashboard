@@ -24,7 +24,8 @@ type Result struct {
 	SnapshotsCreated int // editions newly written this run
 	SnapshotsSkipped int // editions already present (idempotent re-run)
 	EntriesCreated   int
-	Failures         []EditionFailure // editions that could not be ingested
+	Failures         []EditionFailure // editions that could not be ingested (fatal)
+	Anomalies        []EditionAnomaly // editions that ingested but look off (non-fatal)
 }
 
 // EditionFailure records an edition that failed to ingest (e.g. a malformed
@@ -76,6 +77,16 @@ func ingestOne(ctx context.Context, db *sql.DB, sourceID int64, we scraper.Weigh
 	rows, err := scraper.ParseTable(we.Edition.Content)
 	if err != nil {
 		return fmt.Errorf("parse table: %w", err)
+	}
+
+	// Non-fatal: surface rank oddities (ties/gaps) for eyeballing without
+	// blocking ingestion. Detected on every run, including idempotent skips.
+	if issues := detectAnomalies(rows); len(issues) > 0 {
+		res.Anomalies = append(res.Anomalies, EditionAnomaly{
+			WeightClass:   we.WeightClass,
+			PublishedDate: we.Edition.PublishDate,
+			Issues:        issues,
+		})
 	}
 
 	snap := store.Snapshot{
