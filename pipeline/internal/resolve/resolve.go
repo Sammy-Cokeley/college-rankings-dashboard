@@ -8,11 +8,13 @@
 //  1. exact alias hit on (source, raw_name, raw_school);
 //  2. normalized-key match (case/whitespace/punctuation-insensitive).
 //
-// Identity is (name, school). There is intentionally no fuzzy matching and no
-// name-only cross-school merge, so two distinct wrestlers are never silently
-// merged; the cost is that a mid-season transfer fragments into two identities
-// until a later merge (transfer feed / manual review) attaches the second
-// school string as an alias of the first wrestler.
+// Identity is (name, canonical school): the school is normalized and then mapped
+// through a curated variant table (schools.go) so confirmed spellings of one
+// school collapse. There is intentionally no fuzzy matching and no name-only
+// cross-school merge, so two distinct wrestlers are never silently merged; the
+// cost is that a mid-season transfer fragments into two identities until a later
+// merge (transfer feed / manual review) attaches the second school string as an
+// alias of the first wrestler.
 package resolve
 
 import (
