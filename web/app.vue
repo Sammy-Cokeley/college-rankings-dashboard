@@ -95,4 +95,36 @@ a:hover {
   color: var(--muted);
   font-size: 0.85rem;
 }
+
+/* Rankings tables (dashboard + weight pages) */
+.rank-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.rank-table th {
+  text-align: left;
+  padding: 0.4rem 0.6rem;
+  border-bottom: 2px solid var(--ink);
+  white-space: nowrap;
+}
+
+.rank-table td {
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.rank-table tbody tr:nth-child(even) {
+  background: var(--bg-alt);
+}
+
+.rank-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.rank-table .rank {
+  font-weight: 700;
+}
 </style>
