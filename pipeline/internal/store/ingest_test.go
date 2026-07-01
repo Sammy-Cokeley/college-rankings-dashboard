@@ -130,34 +130,94 @@ func TestResolutionCRUD(t *testing.T) {
 	}
 }
 
-// Documents a known v0 limitation: the schema's UNIQUE(snapshot_id, rank) means
-// an edition containing tie ranks (which docs/sources/flowrestling.md flags as
-// possible in Flo's hand-entered tables) cannot be ingested. The behavior must
-// be fail-loud AND data-safe: the whole edition's transaction rolls back, so no
-// partial snapshot or entries are left behind. A real tie needs a schema/product
-// decision (the constraint can't hold two rank-5 rows) — not a silent offset.
-func TestIngestEdition_TieRanksFailAtomically(t *testing.T) {
+// A genuine tie — two wrestlers published at the same rank — must ingest, not
+// fail: Flo's hand-entered tables carry them (197, 2026-03-27), and the schema
+// stores the source's rank verbatim (schema.md §7). Both rows land in one
+// snapshot; the key is UNIQUE(snapshot_id, rank, raw_source_string), so distinct
+// names at the same rank coexist.
+func TestIngestEdition_AllowsTieRanks(t *testing.T) {
 	ctx := context.Background()
 	db := freshDB(t)
 	sourceID, _ := SourceID(ctx, db, "FloWrestling")
 
 	school := "NC State"
-	_, _, err := IngestEdition(ctx, db, Snapshot{
+	_, created, err := IngestEdition(ctx, db, Snapshot{
 		SourceID: sourceID, WeightClass: 125, Season: 2026,
 		PublishedDate: "2025-09-29", CapturedAt: "2026-06-29T00:00:00Z",
 	}, []RankingEntry{
 		{Rank: 5, RawSourceString: "Wrestler A", RawSchool: &school},
 		{Rank: 5, RawSourceString: "Wrestler B", RawSchool: &school}, // tie
 	})
-	if err == nil {
-		t.Fatal("expected a UNIQUE(snapshot_id, rank) error on tie ranks")
+	if err != nil {
+		t.Fatalf("tie edition should ingest: %v", err)
 	}
-	// Atomic rollback: nothing persisted.
-	if n := countRows(t, db, `SELECT COUNT(*) FROM snapshots`); n != 0 {
-		t.Errorf("snapshots after failed tie ingest = %d, want 0 (rolled back)", n)
+	if !created {
+		t.Error("created = false, want true (new snapshot written)")
 	}
-	if n := countRows(t, db, `SELECT COUNT(*) FROM ranking_entries`); n != 0 {
-		t.Errorf("entries after failed tie ingest = %d, want 0 (rolled back)", n)
+	if n := countRows(t, db, `SELECT COUNT(*) FROM snapshots`); n != 1 {
+		t.Errorf("snapshots = %d, want 1", n)
+	}
+	if n := countRows(t, db, `SELECT COUNT(*) FROM ranking_entries`); n != 2 {
+		t.Errorf("entries = %d, want 2 (both tied rows stored)", n)
+	}
+}
+
+// The relaxed key still guards against the realistic bug: the exact same row
+// (same snapshot, rank, and raw_source_string) inserted twice is rejected.
+func TestRankingEntries_RejectExactDuplicateRow(t *testing.T) {
+	ctx := context.Background()
+	db := freshDB(t)
+	sourceID, _ := SourceID(ctx, db, "FloWrestling")
+
+	snapID, err := InsertSnapshot(ctx, db, Snapshot{
+		SourceID: sourceID, WeightClass: 125, Season: 2026,
+		PublishedDate: "2025-09-29", CapturedAt: "2026-06-29T00:00:00Z",
+	})
+	if err != nil {
+		t.Fatalf("insert snapshot: %v", err)
+	}
+	entry := RankingEntry{SnapshotID: snapID, Rank: 5, RawSourceString: "Wrestler A"}
+	if _, err := InsertRankingEntry(ctx, db, entry); err != nil {
+		t.Fatalf("first insert: %v", err)
+	}
+	if _, err := InsertRankingEntry(ctx, db, entry); err == nil {
+		t.Fatal("expected UNIQUE(snapshot_id, rank, raw_source_string) error on exact-duplicate row")
+	}
+}
+
+// Two entries tied at one rank must come back in a stable order (rank, then
+// raw_source_string), not SQLite's arbitrary order for equal ranks — so SSR
+// output and tests are deterministic (schema.md §7). Insert B before A to prove
+// the query sorts rather than echoing insertion order.
+func TestListEntries_TieRankStableOrder(t *testing.T) {
+	ctx := context.Background()
+	db := freshDB(t)
+	sourceID, _ := SourceID(ctx, db, "FloWrestling")
+
+	snapID, err := InsertSnapshot(ctx, db, Snapshot{
+		SourceID: sourceID, WeightClass: 197, Season: 2026,
+		PublishedDate: "2026-03-27", CapturedAt: "2026-06-29T00:00:00Z",
+	})
+	if err != nil {
+		t.Fatalf("insert snapshot: %v", err)
+	}
+	for _, name := range []string{"Wrestler B", "Wrestler A"} { // reverse order
+		if _, err := InsertRankingEntry(ctx, db,
+			RankingEntry{SnapshotID: snapID, Rank: 21, RawSourceString: name}); err != nil {
+			t.Fatalf("insert %q: %v", name, err)
+		}
+	}
+
+	entries, err := ListEntries(ctx, db, snapID)
+	if err != nil {
+		t.Fatalf("list entries: %v", err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("entries = %d, want 2", len(entries))
+	}
+	if entries[0].RawSourceString != "Wrestler A" || entries[1].RawSourceString != "Wrestler B" {
+		t.Errorf("tie order = [%q, %q], want [Wrestler A, Wrestler B]",
+			entries[0].RawSourceString, entries[1].RawSourceString)
 	}
 }
 

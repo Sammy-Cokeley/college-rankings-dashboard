@@ -62,7 +62,13 @@ CREATE TABLE ranking_entries (
   raw_source_string TEXT NOT NULL,                      -- published identity string (e.g. the name cell)
   raw_school        TEXT,                               -- school as published this week (point-in-time)
   raw_grade         TEXT,                               -- eligibility as published (FR/SO/JR/SR)
-  UNIQUE (snapshot_id, rank)
+  -- raw_source_string is part of the key so a snapshot can hold a genuine tie
+  -- (two wrestlers published at the same rank — observed in Flo's hand-entered
+  -- tables, e.g. 197 2026-03-27). It is NOT UNIQUE(snapshot_id, rank): storing
+  -- the source's published rank verbatim beats silently renumbering it, and one
+  -- tie must never reject the whole edition. The key still catches the realistic
+  -- bug — the exact same row inserted twice.
+  UNIQUE (snapshot_id, rank, raw_source_string)
 );
  
 CREATE INDEX idx_entries_wrestler ON ranking_entries(wrestler_id);

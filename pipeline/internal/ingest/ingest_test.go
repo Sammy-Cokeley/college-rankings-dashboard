@@ -121,8 +121,8 @@ func TestContainer_Idempotent(t *testing.T) {
 }
 
 // A single malformed edition must be isolated: it lands in Result.Failures
-// while every other edition still ingests. (Tie ranks are the documented real
-// case; a duplicate-rank table is the same failure class and easy to construct.)
+// while every other edition still ingests. A ragged row (cell count != header)
+// is a genuine parser failure; a tie rank is NOT (ties ingest — schema.md §7).
 func TestContainer_IsolatesBadEdition(t *testing.T) {
 	ctx := context.Background()
 	db := newDB(t)
@@ -130,18 +130,17 @@ func TestContainer_IsolatesBadEdition(t *testing.T) {
 	good := `<table><tbody>
 <tr><td>Rank</td><td>Grade</td><td>Name</td><td>School</td></tr>
 <tr><td>1</td><td>SO</td><td>Vincent Robinson</td><td>NC State</td></tr></tbody></table>`
-	// Tie rank: violates UNIQUE(snapshot_id, rank) at ingest time.
-	tie := `<table><tbody>
+	// Ragged row: header has 4 columns, this data row has 3 -> ParseTable fails.
+	ragged := `<table><tbody>
 <tr><td>Rank</td><td>Grade</td><td>Name</td><td>School</td></tr>
-<tr><td>1</td><td>SO</td><td>Wrestler A</td><td>Iowa</td></tr>
-<tr><td>1</td><td>JR</td><td>Wrestler B</td><td>Ohio State</td></tr></tbody></table>`
+<tr><td>1</td><td>SO</td><td>Wrestler A</td></tr></tbody></table>`
 
 	c := scraper.Container{
 		ID:    1,
 		Title: "2025-26 NCAA DI Wrestling Rankings",
 		RankingSections: map[string][]scraper.Edition{
 			"2":  {{Name: "125", PublishDate: "2025-09-29", Content: good}},
-			"11": {{Name: "285", PublishDate: "2025-09-29", Content: tie}},
+			"11": {{Name: "285", PublishDate: "2025-09-29", Content: ragged}},
 		},
 	}
 

@@ -3,6 +3,7 @@ package scraper
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"golang.org/x/net/html"
@@ -80,26 +81,49 @@ func extractAppState(page []byte) (string, error) {
 // containerFromTransferState parses the decoded transfer-state JSON. The object
 // is keyed by "G.<api-url>"; the ranking container is the value whose key
 // contains "ranking-containers", with the payload at .body.data.
+//
+// The map is decoded value-by-value (json.RawMessage), not into one strongly
+// typed struct map: Angular's transfer state mixes value shapes — alongside the
+// API-response objects, some entries are bare strings/bools — so unmarshalling
+// every value into the body/data struct would fail the whole document. Only the
+// matched ranking-containers entry is typed.
+//
+// Exactly one key must match. Zero is an error, and so is more than one: Go map
+// iteration order is random, so silently picking one of several matches would be
+// non-deterministic — better to fail loud on the unexpected shape (as the table
+// parser does) than guess. The validated live page carries a single match.
 func containerFromTransferState(decoded []byte) (Container, error) {
-	var state map[string]struct {
-		Body struct {
-			Data json.RawMessage `json:"data"`
-		} `json:"body"`
-	}
+	var state map[string]json.RawMessage
 	if err := json.Unmarshal(decoded, &state); err != nil {
 		return Container{}, fmt.Errorf("unmarshal transfer state: %w", err)
 	}
 
-	for key, entry := range state {
-		if !strings.Contains(key, "ranking-containers") {
-			continue
+	var keys []string
+	for key := range state {
+		if strings.Contains(key, "ranking-containers") {
+			keys = append(keys, key)
 		}
-		if len(entry.Body.Data) == 0 {
-			return Container{}, fmt.Errorf("ranking-containers entry %q has no body.data", key)
-		}
-		return ParseContainer(entry.Body.Data)
 	}
-	return Container{}, fmt.Errorf("no ranking-containers key in transfer state")
+	switch {
+	case len(keys) == 0:
+		return Container{}, fmt.Errorf("no ranking-containers key in transfer state")
+	case len(keys) > 1:
+		sort.Strings(keys)
+		return Container{}, fmt.Errorf("ambiguous transfer state: %d ranking-containers keys %v", len(keys), keys)
+	}
+
+	var entry struct {
+		Body struct {
+			Data json.RawMessage `json:"data"`
+		} `json:"body"`
+	}
+	if err := json.Unmarshal(state[keys[0]], &entry); err != nil {
+		return Container{}, fmt.Errorf("unmarshal ranking-containers entry %q: %w", keys[0], err)
+	}
+	if len(entry.Body.Data) == 0 {
+		return Container{}, fmt.Errorf("ranking-containers entry %q has no body.data", keys[0])
+	}
+	return ParseContainer(entry.Body.Data)
 }
 
 func attr(n *html.Node, key string) string {

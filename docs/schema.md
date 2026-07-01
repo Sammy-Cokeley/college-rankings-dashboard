@@ -64,7 +64,7 @@ CREATE TABLE ranking_entries (
   raw_source_string TEXT NOT NULL,     -- published identity string; never lose this
   raw_school        TEXT,              -- school as published this week (point-in-time)
   raw_grade         TEXT,              -- eligibility as published: FR/SO/JR/SR
-  UNIQUE (snapshot_id, rank)
+  UNIQUE (snapshot_id, rank, raw_source_string)  -- allows a genuine tie; see §7
 );
  
 CREATE INDEX idx_entries_wrestler ON ranking_entries(wrestler_id);
@@ -116,6 +116,19 @@ CREATE INDEX idx_aliases_lookup   ON wrestler_aliases(source_id, raw_name);
    deliberately out of the model for now (display-first; sources presented
    individually and attributed). If/when added, it's a derived view, not a
    stored authority.
+7. **Rank is not unique within a snapshot; ties are stored verbatim.** The entry
+   key is `UNIQUE (snapshot_id, rank, raw_source_string)`, not
+   `(snapshot_id, rank)`. Flo's hand-entered tables do publish two wrestlers at
+   the same rank (confirmed 197, 2026-03-27 — likely an editorial typo, but we
+   can't distinguish that from an intentional tie, and either way the rule is to
+   store what the source published, never a silently renumbered version). A
+   stricter constraint would reject the second row and — because an edition
+   ingests in one transaction — discard the *entire* snapshot over one tie,
+   violating "never block ingestion / never lose raw." Including
+   `raw_source_string` in the key still rejects the realistic bug: the same row
+   inserted twice. Consumers must treat rank as non-unique (order by
+   `rank, raw_source_string`); movement (§5) is unaffected, as it partitions by
+   wrestler and orders by `published_date`, not by rank.
 ## Postgres deltas
  
 If you choose Postgres instead of SQLite:

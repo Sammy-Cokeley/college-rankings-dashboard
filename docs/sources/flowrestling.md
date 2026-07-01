@@ -142,7 +142,9 @@ Observations:
   **column set** and the **row count** change over a season. Parse by reading the
   header row to locate columns; never hardcode positions or a row count. (These
   are hand-entered editorial tables — also expect stray markup, "NR"/blanks in
-  Previous, and possible tie ranks.)
+  Previous, and tie ranks: confirmed at 197 2026-03-27, where two wrestlers share
+  rank 21 — likely a typo, but stored verbatim. The schema permits it; see
+  schema.md §7.)
 
 ## How this maps to the store schema
 
