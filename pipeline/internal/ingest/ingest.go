@@ -28,9 +28,10 @@ type Result struct {
 }
 
 // EditionFailure records an edition that failed to ingest (e.g. a malformed
-// table, or a tie rank that the schema's UNIQUE(snapshot_id, rank) rejects).
+// table: a ragged row, a missing required column, or a non-numeric rank).
 // Failures are isolated per edition so one bad edition never blocks the rest of
-// the run; the caller surfaces them for manual handling.
+// the run; the caller surfaces them for manual handling. (A tie rank is NOT a
+// failure — the schema stores ties verbatim; see schema.md §7.)
 type EditionFailure struct {
 	WeightClass   int
 	PublishedDate string
@@ -46,10 +47,10 @@ func (f EditionFailure) String() string {
 // caller (the container title carries "2025-26" but the ending-year integer is
 // an explicit per-run input — see cmd/scrape).
 //
-// A per-edition failure (malformed table, tie rank) is isolated: the edition is
-// recorded in Result.Failures and the run continues, so one bad edition never
-// blocks the other weights/weeks. The returned error is reserved for systemic
-// failures (e.g. the source isn't seeded) that abort the whole run.
+// A per-edition failure (malformed table) is isolated: the edition is recorded
+// in Result.Failures and the run continues, so one bad edition never blocks the
+// other weights/weeks. The returned error is reserved for systemic failures
+// (e.g. the source isn't seeded) that abort the whole run.
 func Container(ctx context.Context, db *sql.DB, c scraper.Container, season int, capturedAt time.Time) (Result, error) {
 	sourceID, err := store.SourceID(ctx, db, sourceName)
 	if err != nil {

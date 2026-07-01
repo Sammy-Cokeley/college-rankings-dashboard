@@ -70,9 +70,9 @@ func run(dbPath, fixture, page, url string, season int) error {
 	log.Printf("ingested season %d from %q: %d snapshots created, %d skipped, %d entries",
 		season, container.Title, res.SnapshotsCreated, res.SnapshotsSkipped, res.EntriesCreated)
 
-	// Per-edition failures (e.g. an unexpected tie rank) don't abort the run,
-	// but they must be surfaced loudly for manual handling — and exit non-zero
-	// so a cron run is flagged rather than passing silently.
+	// Per-edition failures (e.g. a malformed table) don't abort the run, but
+	// they must be surfaced loudly for manual handling — and exit non-zero so a
+	// cron run is flagged rather than passing silently.
 	if len(res.Failures) > 0 {
 		for _, f := range res.Failures {
 			log.Printf("FAILED edition (needs manual handling): %s", f)

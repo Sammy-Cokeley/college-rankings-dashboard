@@ -1,7 +1,27 @@
-# testdata — FloWrestling fixture
+# testdata — FloWrestling fixtures
 
-`ranking_container_14300895.json` — a **trimmed, decoded** capture of the live
-FloWrestling season container `14300895` (2025-26 NCAA DI), taken 2026-06-28.
+Two decoded captures of the live FloWrestling season container `14300895`
+(2025-26 NCAA DI). Both are consumed via `ParseContainer`.
+
+- **`ranking_container_14300895.json`** — trimmed to **2 weights** (125 + 285),
+  all 22 editions. The small, *clean* corpus that backs the precise parser /
+  ingest / resolve unit tests (contiguous ranks, 1:1 identities). Taken
+  2026-06-28. Details below.
+- **`ranking_container_14300895_10weights.json`** — **all 10 weights**, all 22
+  editions each (220 editions). The full-container validation corpus, added
+  2026-06-30 after validating the pipeline against the live page. It carries the
+  real-world messiness the 2-weight cut doesn't: a genuine **tie rank** (197,
+  2026-03-27 — two wrestlers at 21) and a school-abbreviation identity split
+  (`Penn`/`Pennsylvania`). Guarded by `TestFullContainer_*` in the scraper
+  package. Prose fields dropped, and the content tables' inline HTML attributes
+  (styles) are stripped — the parser reads cell text only, so this is
+  parser-invariant and just keeps the file diffable (~1.5 MB, not ~4.3 MB). For
+  full-fidelity raw markup handling, see the 2-weight fixture below, which keeps
+  Flo's HTML verbatim.
+
+## `ranking_container_14300895.json` (2-weight)
+
+A **trimmed, decoded** capture taken 2026-06-28.
 
 ## How it was produced
 
