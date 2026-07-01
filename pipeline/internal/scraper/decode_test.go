@@ -74,3 +74,27 @@ func TestDecodeAppState_NoRankingContainer(t *testing.T) {
 		t.Fatal("expected error when no ranking-containers key present")
 	}
 }
+
+// More than one key contains "ranking-containers": map iteration order is
+// random, so the decoder must reject the ambiguity rather than silently pick one.
+func TestDecodeAppState_AmbiguousRankingContainers(t *testing.T) {
+	page := `<html><body><script id="flo-app-state">` +
+		`{&q;G.a/ranking-containers/1&q;:{&q;body&q;:{&q;data&q;:{&q;ranking_sections&q;:{}}}},` +
+		`&q;G.b/ranking-containers/2&q;:{&q;body&q;:{&q;data&q;:{&q;ranking_sections&q;:{}}}}}` +
+		`</script></body></html>`
+	if _, err := DecodeAppState([]byte(page)); err == nil {
+		t.Fatal("expected error when multiple ranking-containers keys present")
+	}
+}
+
+// The matched ranking-containers key exists but its value is a bare string, not
+// a {body:{data}} object — exercises the per-entry unmarshal error path that the
+// value-by-value decode introduced.
+func TestDecodeAppState_MalformedRankingContainerEntry(t *testing.T) {
+	page := `<html><body><script id="flo-app-state">` +
+		`{&q;G.api/ranking-containers/1&q;:&q;not an object&q;}` +
+		`</script></body></html>`
+	if _, err := DecodeAppState([]byte(page)); err == nil {
+		t.Fatal("expected error when the ranking-containers value is not a body/data object")
+	}
+}

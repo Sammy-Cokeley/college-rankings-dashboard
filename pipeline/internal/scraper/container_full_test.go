@@ -85,6 +85,7 @@ func TestFullContainer_TieRankPreserved(t *testing.T) {
 		if len(atRank21) != 2 {
 			t.Fatalf("rank 21 has %d wrestlers %v, want 2 (the tie)", len(atRank21), atRank21)
 		}
+		break // weight+date is unique in the container; no need to scan the rest
 	}
 	if !found {
 		t.Fatal("197 2026-03-27 edition not present in fixture")
