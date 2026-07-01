@@ -80,19 +80,29 @@ func extractAppState(page []byte) (string, error) {
 // containerFromTransferState parses the decoded transfer-state JSON. The object
 // is keyed by "G.<api-url>"; the ranking container is the value whose key
 // contains "ranking-containers", with the payload at .body.data.
+//
+// The map is decoded value-by-value (json.RawMessage), not into one strongly
+// typed struct map: Angular's transfer state mixes value shapes — alongside the
+// API-response objects, some entries are bare strings/bools — so unmarshalling
+// every value into the body/data struct would fail the whole document. Only the
+// matched ranking-containers entry is typed.
 func containerFromTransferState(decoded []byte) (Container, error) {
-	var state map[string]struct {
-		Body struct {
-			Data json.RawMessage `json:"data"`
-		} `json:"body"`
-	}
+	var state map[string]json.RawMessage
 	if err := json.Unmarshal(decoded, &state); err != nil {
 		return Container{}, fmt.Errorf("unmarshal transfer state: %w", err)
 	}
 
-	for key, entry := range state {
+	for key, raw := range state {
 		if !strings.Contains(key, "ranking-containers") {
 			continue
+		}
+		var entry struct {
+			Body struct {
+				Data json.RawMessage `json:"data"`
+			} `json:"body"`
+		}
+		if err := json.Unmarshal(raw, &entry); err != nil {
+			return Container{}, fmt.Errorf("unmarshal ranking-containers entry %q: %w", key, err)
 		}
 		if len(entry.Body.Data) == 0 {
 			return Container{}, fmt.Errorf("ranking-containers entry %q has no body.data", key)
