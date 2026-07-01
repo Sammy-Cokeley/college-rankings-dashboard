@@ -62,10 +62,18 @@ found and fixed, and one schema assumption was corrected.
 - Fixture: `testdata/ranking_container_14300895_10weights.json` (all 10 weights)
   as the permanent CI validation corpus, guarded by `TestFullContainer_*`.
 
-## Known follow-ups (not fixed here)
+## Known follow-ups
 
-- The `Penn`/`Pennsylvania` false split is the documented, accepted v0 cost of
-  the (name, school) identity rule — needs a school-canonicalization or
-  alias-merge pass later, same mechanism as the transfer merges.
-- Ties currently ingest silently. A non-fatal "anomaly" signal on the ingest run
-  (so a human can eyeball Flo typos without blocking) was proposed and deferred.
+Both items below were deferred out of the validation work and have since been
+addressed on `feat/flo-pipeline-followups`:
+
+- **School canonicalization (done).** The `Penn`/`Pennsylvania` false split is
+  fixed by a curated normalized-school map (`resolve/schools.go`) applied to the
+  identity key only — `raw_school` stays verbatim. Merges Mougalian and nothing
+  else (520 → 519 wrestlers); the five real transfers still fragment. The map is
+  single-source (Flo); a second source will need it to grow, and likely a proper
+  `schools`/`school_aliases` dimension keyed on `school_id`.
+- **Non-fatal ingest anomaly signal (done).** `ingest.Result` gained an
+  `Anomalies` channel (distinct from the fatal `Failures`) that flags duplicate
+  ranks (ties) and rank gaps per edition; `cmd/scrape` logs them but exits 0.
+  The 10-weight fixture reports exactly the one 197 2026-03-27 tie.

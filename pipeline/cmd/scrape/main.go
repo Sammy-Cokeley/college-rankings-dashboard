@@ -70,6 +70,12 @@ func run(dbPath, fixture, page, url string, season int) error {
 	log.Printf("ingested season %d from %q: %d snapshots created, %d skipped, %d entries",
 		season, container.Title, res.SnapshotsCreated, res.SnapshotsSkipped, res.EntriesCreated)
 
+	// Non-fatal anomalies (ties/gaps): surface for a human to eyeball, but they
+	// never fail the run — the source published it and we stored it verbatim.
+	for _, a := range res.Anomalies {
+		log.Printf("ANOMALY (non-fatal, eyeball): %s", a)
+	}
+
 	// Per-edition failures (e.g. a malformed table) don't abort the run, but
 	// they must be surfaced loudly for manual handling — and exit non-zero so a
 	// cron run is flagged rather than passing silently.

@@ -8,16 +8,18 @@ import (
 // normalizeKey builds the comparison key for entity matching from a raw name
 // and raw school. Two raw strings that differ only in case, surrounding/internal
 // whitespace, or punctuation collapse to the same key — enough to absorb
-// week-to-week editorial drift within a single source. It deliberately does NOT
-// canonicalize school abbreviations or do fuzzy matching: identity is (name,
-// school), so a genuine school change stays a distinct key (a transfer
-// fragments into two identities until merged later).
+// week-to-week editorial drift within a single source. The school is then mapped
+// through canonicalSchools (see schools.go), so confirmed spelling variants of
+// one school (e.g. "Penn"/"Pennsylvania") collapse too. It still does NOT do
+// fuzzy matching: identity is (name, canonical school), so a genuine school
+// change stays a distinct key (a transfer fragments into two identities until
+// merged later).
 func normalizeKey(name string, school *string) string {
 	var s string
 	if school != nil {
 		s = *school
 	}
-	return normalizeToken(name) + "\x00" + normalizeToken(s)
+	return normalizeToken(name) + "\x00" + canonicalSchool(normalizeToken(s))
 }
 
 // normalizeToken lowercases, removes punctuation (keeping alphanumerics and
