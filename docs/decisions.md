@@ -97,6 +97,18 @@ when a decision changes; note the date and the reason.
   edge cases (unresolved entries have no identity to follow; per-source only;
   "current weight" is ambiguous in the week both weights' lists include the
   wrestler, since editions publish on different dates).
+## Web UI
+ 
+- **The "All Weights" dashboard is NOT the intended home page.** _(noted
+  2026-07-02.)_ The flat all-weights table at `/` is a useful power-user tool
+  but a weak front door; it exists because v0 needed a landing surface, not
+  because it won a design. A proper home page (shape TBD — e.g. latest-week
+  summary, biggest movers, weight-class entry points) is future work. Keep the
+  all-weights table reachable when that lands; don't grow features into it in
+  the meantime on the assumption it stays the home page.
+- **Site naming is open.** Mockup brands ("MatBoard" etc.) were placeholders;
+  the visual identity work styles the existing descriptive title until a real
+  name is chosen.
 ## The hard problem
  
 Entity resolution across sources — not scraping. Canonical `wrestlers` +
