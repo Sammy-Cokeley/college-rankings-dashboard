@@ -74,6 +74,29 @@ when a decision changes; note the date and the reason.
     `schema.md` Postgres deltas), so SQLite-now does not lock us in.
 - **Decoupling:** pipeline and web share only the DB; `db/` owns the schema as
   language-neutral SQL migrations.
+## Movement display
+ 
+- **Movement is per-weight; cross-weight context is deferred.** _(decided
+  2026-07-02, with the web v0.)_ The displayed movement is LAG over
+  `published_date` partitioned by source/weight/season/wrestler (`schema.md`
+  §5). A mid-season weight change therefore shows as either **NEW** (never
+  ranked at the new weight) or movement from the wrestler's *last edition at
+  that same weight*, however stale. Canonical example: Dylan Evans left 157
+  after 2025-10-29 (rank 21), wrestled 165 through December, and returned to
+  157 on 2026-01-05 at 16 — we show ▲5 vs his October rank; Flo's own
+  "Previous" column shows `24 (165)`, his last rank at the *other* weight.
+  This is the single divergence from Flo's column in 6421 comparisons
+  (`sources/flowrestling-validation.md`), it's deliberate, and it's pinned by
+  an integration test.
+- **Deferred enhancement, not a data gap:** the schema already represents
+  weight changes fully (weight lives on the snapshot, §3), and resolution ties
+  the weights to one canonical `wrestler_id` — so a future "NEW — previously
+  #24 at 165" annotation is one "last ranked at any weight, this
+  source+season" query. Held out of v0 because it's context enrichment on top
+  of week-over-week movement, it grows the API row shape, and it has real
+  edge cases (unresolved entries have no identity to follow; per-source only;
+  "current weight" is ambiguous in the week both weights' lists include the
+  wrestler, since editions publish on different dates).
 ## The hard problem
  
 Entity resolution across sources — not scraping. Canonical `wrestlers` +
