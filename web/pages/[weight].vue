@@ -7,12 +7,14 @@ definePageMeta({
 })
 
 const route = useRoute()
-const weight = Number(route.params.weight)
+// Reactive: the router reuses this component instance when navigating between
+// weight pages, so a plain const would freeze the first weight visited.
+const weight = computed(() => Number(route.params.weight))
 
 const url = computed(() => {
   const date = route.query.date
   const query = typeof date === 'string' ? `?date=${encodeURIComponent(date)}` : ''
-  return `/api/rankings/${weight}${query}`
+  return `/api/rankings/${weight.value}${query}`
 })
 
 const { data, error } = await useFetch<WeightRankings>(url)
@@ -38,11 +40,11 @@ function toEdition(date: string | null) {
 const seasonLabel = computed(() => `${edition.value.season - 1}-${String(edition.value.season).slice(2)}`)
 
 useHead(() => ({
-  title: `${weight} lbs — NCAA DI Wrestling Rankings (Week ${edition.value.week}, ${edition.value.date})`,
+  title: `${weight.value} lbs — NCAA DI Wrestling Rankings (Week ${edition.value.week}, ${edition.value.date})`,
   meta: [
     {
       name: 'description',
-      content: `${data.value!.source} NCAA DI wrestling rankings at ${weight} lbs, week ${edition.value.week} of the ${seasonLabel.value} season, with week-over-week movement.`,
+      content: `${data.value!.source} NCAA DI wrestling rankings at ${weight.value} lbs, week ${edition.value.week} of the ${seasonLabel.value} season, with week-over-week movement.`,
     },
   ],
 }))
