@@ -1,0 +1,10 @@
+# Nuxt build artifacts + deps
+node_modules
+.nuxt
+.output
+dist
+.data
+
+# Env
+.env
+.env.*
