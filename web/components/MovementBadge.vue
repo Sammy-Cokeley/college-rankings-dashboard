@@ -10,37 +10,38 @@ const move = computed(() => movement(props.rank, props.prevRank))
 </script>
 
 <template>
-  <span class="movement" :class="move.kind">
+  <span class="mv" :class="move.kind">
     <template v-if="move.kind === 'new'">NEW</template>
     <template v-else-if="move.kind === 'up'">▲{{ move.delta }}</template>
     <template v-else-if="move.kind === 'down'">▼{{ move.delta }}</template>
-    <template v-else>—</template>
+    <template v-else>·</template>
   </span>
 </template>
 
 <style scoped>
-.movement {
+.mv {
+  font-family: var(--font-mono);
   font-size: 0.85rem;
-  font-variant-numeric: tabular-nums;
+  font-weight: 600;
   white-space: nowrap;
 }
 
-.movement.up {
+.mv.up {
   color: var(--up);
 }
 
-.movement.down {
+.mv.down {
   color: var(--down);
 }
 
-.movement.even {
+.mv.even {
   color: var(--muted);
+  font-weight: 400;
 }
 
-.movement.new {
+.mv.new {
   color: var(--accent);
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
 }
 </style>
