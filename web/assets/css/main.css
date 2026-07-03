@@ -1,4 +1,4 @@
-/* Visual identity: "stat board" (docs/decisions.md, Web UI).
+﻿/* Visual identity: "stat board" (docs/decisions.md, Web UI).
    One token set, two themes. Dark is the default/flagship; light derives from
    the same variables. Theme resolution order:
      1. explicit user choice via data-theme on <html> (cookie-backed)
@@ -56,7 +56,7 @@
   --ink: #171b22;
   --muted: #5d6673;
   --line: #e3e6eb;
-  --accent: #9a6a00; /* bronze: gold that survives a white background */
+  --accent: #8a5f00; /* bronze: gold that survives a white background */
   --up: #0e7a43;
   --down: #c92a2a;
 }
@@ -71,7 +71,7 @@
     --ink: #171b22;
     --muted: #5d6673;
     --line: #e3e6eb;
-    --accent: #9a6a00;
+    --accent: #8a5f00;
     --up: #0e7a43;
     --down: #c92a2a;
   }
@@ -92,6 +92,13 @@ body {
 
 a {
   color: var(--accent);
+}
+
+/* Custom surfaces can swallow the UA default focus ring, especially on the
+   dark theme — make keyboard focus explicit and token-aware instead. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .wrap {
