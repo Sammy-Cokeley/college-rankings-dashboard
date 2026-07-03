@@ -109,6 +109,16 @@ when a decision changes; note the date and the reason.
 - **Site naming is open.** Mockup brands ("MatBoard" etc.) were placeholders;
   the visual identity work styles the existing descriptive title until a real
   name is chosen.
+- **Season trajectory = full-weight bump chart; conference filter deferred.**
+  _(2026-07-03.)_ The weight page charts every resolved wrestler's
+  rank-over-week line (SSR SVG, no chart library); single wrestlers/groups are
+  a selection state (click rows/lines; `?sel=` is shareable), with gaps drawn
+  honestly (absence ≠ interpolation). Selecting "all Big Ten wrestlers"
+  requires a conference dimension that does not exist yet — the `schools`
+  table is empty and only per-entry `raw_school` strings are real. Deferred
+  until a curated school→conference mapping is built (likely alongside a real
+  `schools`/`school_aliases` dimension, see the resolver's school-canon map).
+  School-level selection ships now (raw string grouping is free).
 ## The hard problem
  
 Entity resolution across sources — not scraping. Canonical `wrestlers` +

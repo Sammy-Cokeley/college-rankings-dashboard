@@ -58,8 +58,10 @@ node .output/server/index.mjs   # run the production server
   filter, wrestler/school search, column sort (including movement).
 - `/[weight]` — one weight's latest edition, SSR; `?date=YYYY-MM-DD` shows any
   historical edition (week selector).
-- `/api/rankings`, `/api/rankings/[weight]?date=` — the Nitro routes behind
-  those pages.
+- `/api/rankings`, `/api/rankings/[weight]?date=`,
+  `/api/rankings/[weight]/series` — the Nitro routes behind those pages (the
+  last powers the season-trajectory bump chart; `?sel=1,2` on the weight page
+  shares a pinned selection).
 
 ## Data rules honored here (see `docs/schema.md`)
 
