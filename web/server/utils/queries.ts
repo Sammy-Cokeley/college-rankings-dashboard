@@ -1,5 +1,5 @@
 import type DatabaseConstructor from 'better-sqlite3'
-import type { EditionDate, RankingRow } from '../../types/rankings'
+import type { EditionDate, RankingRow, WrestlerSeries } from '../../types/rankings'
 
 export type Db = InstanceType<typeof DatabaseConstructor>
 
@@ -76,6 +76,7 @@ export function editionEntries(
       `WITH season_entries AS (
          SELECT s.published_date,
                 e.rank,
+                e.wrestler_id,
                 e.raw_source_string,
                 e.raw_school,
                 e.raw_grade,
@@ -93,10 +94,60 @@ export function editionEntries(
               raw_source_string AS name,
               raw_school        AS school,
               raw_grade         AS grade,
-              prev_rank         AS prevRank
+              prev_rank         AS prevRank,
+              wrestler_id       AS wrestlerId
        FROM season_entries
        WHERE published_date = ?
        ORDER BY rank, raw_source_string`,
     )
     .all(sourceId, weight, season, date) as RankingRow[]
+}
+
+// seasonSeries groups a whole weight/season into one rank-over-week line per
+// resolved wrestler (the bump chart's data). Unresolved entries (NULL
+// wrestler_id) have no identity to string a line through, so they are
+// excluded — they still appear in editionEntries. Weeks come from the same
+// derivation as listDates; a week a wrestler went unranked is simply absent
+// from points (render as a gap, never interpolate). name/school are the
+// latest raw spellings, for labeling only.
+export function seasonSeries(
+  db: Db,
+  sourceId: number,
+  weight: number,
+  season: number,
+): WrestlerSeries[] {
+  const rows = db
+    .prepare(
+      `SELECT s.published_date AS date,
+              e.rank,
+              e.wrestler_id       AS wrestlerId,
+              e.raw_source_string AS name,
+              e.raw_school        AS school
+       FROM ranking_entries e
+       JOIN snapshots s ON s.id = e.snapshot_id
+       WHERE s.source_id = ? AND s.weight_class = ? AND s.season = ? AND e.wrestler_id IS NOT NULL
+       ORDER BY s.published_date, e.rank, e.raw_source_string`,
+    )
+    .all(sourceId, weight, season) as Array<{
+    date: string
+    rank: number
+    wrestlerId: number
+    name: string
+    school: string | null
+  }>
+
+  const weekByDate = new Map(listDates(db, sourceId, weight, season).map((d) => [d.date, d.week]))
+
+  const byWrestler = new Map<number, WrestlerSeries>()
+  for (const row of rows) {
+    let series = byWrestler.get(row.wrestlerId)
+    if (!series) {
+      series = { wrestlerId: row.wrestlerId, name: row.name, school: row.school, points: [] }
+      byWrestler.set(row.wrestlerId, series)
+    }
+    series.name = row.name
+    series.school = row.school
+    series.points.push({ week: weekByDate.get(row.date)!, rank: row.rank })
+  }
+  return [...byWrestler.values()]
 }

@@ -9,8 +9,10 @@ import {
   getSourceId,
   latestDate,
   listDates,
+  seasonSeries,
   type Db,
 } from '../server/utils/queries'
+import { seriesSegments } from '../utils/chart'
 
 // Runs against the real pipeline-built DB (web/README.md: npm run db:build)
 // and asserts the known facts from docs/sources/flowrestling-validation.md.
@@ -58,6 +60,29 @@ describe.skipIf(!existsSync(dbPath))('pipeline-built rankings.db', () => {
     const rows = editionEntries(db, src, 157, 2026, '2026-01-05')
     const evans = rows.find((r) => r.name.includes('Dylan Evans'))
     expect(evans).toMatchObject({ rank: 16, prevRank: 21 })
+  })
+
+  it('builds a series for every resolved wrestler ranked at 157', () => {
+    const src = getSourceId(db, 'FloWrestling')!
+    const series = seasonSeries(db, src, 157, 2026)
+    const distinct = db
+      .prepare(
+        `SELECT COUNT(DISTINCT e.wrestler_id) AS n
+         FROM ranking_entries e JOIN snapshots s ON s.id = e.snapshot_id
+         WHERE s.source_id = ? AND s.weight_class = 157 AND s.season = 2026
+           AND e.wrestler_id IS NOT NULL`,
+      )
+      .get(src) as { n: number }
+    expect(series.length).toBe(distinct.n)
+    expect(series.length).toBeGreaterThanOrEqual(33)
+  })
+
+  it("renders Dylan Evans' 165 stint as a real gap in his 157 line", () => {
+    const src = getSourceId(db, 'FloWrestling')!
+    const series = seasonSeries(db, src, 157, 2026)
+    const evans = series.find((s) => s.name === 'Dylan Evans')!
+    expect(evans.points).toHaveLength(14) // 22 editions minus his weeks at 165
+    expect(seriesSegments(evans.points).length).toBeGreaterThan(1)
   })
 
   it('has a latest edition with a full table for every weight', () => {

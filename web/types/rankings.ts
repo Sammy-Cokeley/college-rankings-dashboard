@@ -14,6 +14,31 @@ export interface RankingRow {
   school: string | null // raw_school
   grade: string | null // raw_grade
   prevRank: number | null // LAG over published_date (schema.md §5); null = first appearance
+  wrestlerId: number | null // canonical identity; null until resolved
+}
+
+export interface SeriesPoint {
+  week: number
+  rank: number
+}
+
+// One wrestler's rank-over-week line for a weight/season. Weeks a wrestler
+// went unranked are simply absent — consumers render gaps, never interpolate.
+// name/school are the LATEST raw spellings (for labeling); each underlying
+// entry still keeps its own verbatim values.
+export interface WrestlerSeries {
+  wrestlerId: number
+  name: string
+  school: string | null
+  points: SeriesPoint[]
+}
+
+export interface SeasonSeries {
+  source: string
+  weight: number
+  season: number
+  weeks: EditionDate[]
+  series: WrestlerSeries[]
 }
 
 export interface Edition {
