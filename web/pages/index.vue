@@ -98,101 +98,72 @@ const seasonLabel = computed(() =>
   data.value ? `${data.value.season - 1}-${String(data.value.season).slice(2)}` : '',
 )
 
-useHead(() => ({
+const pageDescription = computed(
+  () =>
+    `Latest ${data.value?.source ?? ''} NCAA DI wrestling rankings for all ten weight classes, ${seasonLabel.value} season, with week-over-week movement.`,
+)
+
+useSeoMeta({
   title: 'NCAA DI Wrestling Rankings — All Weights',
-  meta: [
-    {
-      name: 'description',
-      content: `Latest ${data.value?.source ?? ''} NCAA DI wrestling rankings for all ten weight classes, ${seasonLabel.value} season, with week-over-week movement.`,
-    },
-  ],
-}))
+  description: pageDescription,
+  ogTitle: 'NCAA DI Wrestling Rankings — All Weights',
+  ogDescription: pageDescription,
+  ogType: 'website',
+  twitterCard: 'summary',
+})
 </script>
 
 <template>
   <div v-if="data">
-    <header class="dash-header">
-      <h1>All Weights</h1>
-      <p class="dash-meta">
-        {{ data.source }} · {{ seasonLabel }} season · latest editions
-      </p>
-      <div class="dash-controls">
-        <label>
-          Weight
-          <select v-model="weightFilter">
-            <option value="all">All</option>
-            <option v-for="w in WEIGHT_CLASSES" :key="w" :value="w">{{ w }}</option>
-          </select>
-        </label>
+    <div class="pagehead">
+      <div>
+        <h1>All Weights</h1>
+        <p class="sub">LATEST EDITIONS / {{ data.source }} / {{ seasonLabel }}</p>
+      </div>
+      <div class="controls">
+        <select v-model="weightFilter" aria-label="Filter by weight class">
+          <option value="all">Weight: All</option>
+          <option v-for="w in WEIGHT_CLASSES" :key="w" :value="w">{{ w }}</option>
+        </select>
         <input
           v-model="search"
           type="search"
           placeholder="Search wrestler or school…"
           aria-label="Search wrestler or school"
         >
-        <span class="dash-count">{{ rows.length }} ranked</span>
+        <span class="count">{{ rows.length }} RANKED</span>
       </div>
-    </header>
+    </div>
 
-    <table class="rank-table">
-      <thead>
-        <tr>
-          <th class="num sortable" @click="sortBy('weight')">Weight{{ arrow('weight') }}</th>
-          <th class="num sortable" @click="sortBy('rank')">Rank{{ arrow('rank') }}</th>
-          <th class="sortable" @click="sortBy('name')">Wrestler{{ arrow('name') }}</th>
-          <th class="sortable" @click="sortBy('school')">School{{ arrow('school') }}</th>
-          <th>Grade</th>
-          <th class="num sortable" @click="sortBy('delta')">Move{{ arrow('delta') }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="row in rows" :key="`${row.weight}-${row.rank}-${row.name}`">
-          <td class="num"><NuxtLink :to="`/${row.weight}`">{{ row.weight }}</NuxtLink></td>
-          <td class="num rank">{{ row.rank }}</td>
-          <td>{{ row.name }}</td>
-          <td>{{ row.school }}</td>
-          <td>{{ row.grade }}</td>
-          <td class="num"><MovementBadge :rank="row.rank" :prev-rank="row.prevRank" /></td>
-        </tr>
-      </tbody>
-    </table>
+    <div class="board">
+      <table>
+        <thead>
+          <tr>
+            <th class="num sortable" @click="sortBy('weight')">WT{{ arrow('weight') }}</th>
+            <th class="num sortable" @click="sortBy('rank')">RK{{ arrow('rank') }}</th>
+            <th class="sortable" @click="sortBy('name')">Wrestler{{ arrow('name') }}</th>
+            <th class="sortable" @click="sortBy('school')">School{{ arrow('school') }}</th>
+            <th>YR</th>
+            <th class="num sortable" @click="sortBy('delta')">Move{{ arrow('delta') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in rows" :key="`${row.weight}-${row.rank}-${row.name}`">
+            <td class="num weight"><NuxtLink :to="`/${row.weight}`">{{ row.weight }}</NuxtLink></td>
+            <td class="num rank">{{ row.rank }}</td>
+            <td class="name">{{ row.name }}</td>
+            <td class="school">{{ row.school }}</td>
+            <td class="grade">{{ row.grade }}</td>
+            <td class="num"><MovementBadge :rank="row.rank" :prev-rank="row.prevRank" /></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 </template>
 
 <style scoped>
-.dash-header h1 {
-  margin: 0 0 0.25rem;
-}
-
-.dash-meta {
-  margin: 0;
-  color: var(--muted);
-}
-
-.dash-controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.75rem;
-  margin: 1rem 0;
-}
-
-.dash-controls input[type='search'] {
-  flex: 1;
-  min-width: 12rem;
-  padding: 0.3rem 0.5rem;
-  border: 1px solid var(--line);
-  border-radius: 0.25rem;
-}
-
-.dash-count {
-  color: var(--muted);
-  font-size: 0.85rem;
-  white-space: nowrap;
-}
-
-.sortable {
-  cursor: pointer;
-  user-select: none;
+.controls input[type='search'] {
+  min-width: 14rem;
 }
 </style>

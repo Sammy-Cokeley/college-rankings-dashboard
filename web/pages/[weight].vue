@@ -39,93 +39,70 @@ function toEdition(date: string | null) {
 
 const seasonLabel = computed(() => `${edition.value.season - 1}-${String(edition.value.season).slice(2)}`)
 
-useHead(() => ({
-  title: `${weight.value} lbs — NCAA DI Wrestling Rankings (Week ${edition.value.week}, ${edition.value.date})`,
-  meta: [
-    {
-      name: 'description',
-      content: `${data.value!.source} NCAA DI wrestling rankings at ${weight.value} lbs, week ${edition.value.week} of the ${seasonLabel.value} season, with week-over-week movement.`,
-    },
-  ],
-}))
+const pageTitle = computed(
+  () =>
+    `${weight.value} lbs — NCAA DI Wrestling Rankings (Week ${edition.value.week}, ${edition.value.date})`,
+)
+const pageDescription = computed(
+  () =>
+    `${data.value!.source} NCAA DI wrestling rankings at ${weight.value} lbs, week ${edition.value.week} of the ${seasonLabel.value} season, with week-over-week movement.`,
+)
+
+useSeoMeta({
+  title: pageTitle,
+  description: pageDescription,
+  ogTitle: pageTitle,
+  ogDescription: pageDescription,
+  ogType: 'website',
+  twitterCard: 'summary',
+})
 </script>
 
 <template>
   <div v-if="data">
-    <header class="edition-header">
-      <h1>{{ weight }} lbs</h1>
-      <p class="edition-meta">
-        {{ data.source }} · {{ seasonLabel }} season · Week {{ edition.week }} ·
-        published {{ edition.date }}
-      </p>
-      <nav class="edition-nav" aria-label="Editions">
-        <button :disabled="!prevDate" @click="toEdition(prevDate)">← previous</button>
-        <label>
-          Week
-          <select :value="edition.date" @change="toEdition(($event.target as HTMLSelectElement).value)">
-            <option v-for="d in dates" :key="d.date" :value="d.date">
-              {{ d.week }} — {{ d.date }}
-            </option>
-          </select>
-        </label>
-        <button :disabled="!nextDate" @click="toEdition(nextDate)">next →</button>
+    <div class="pagehead">
+      <div>
+        <h1>{{ weight }}<small>LBS</small></h1>
+        <p class="sub">
+          WK {{ edition.week }} / {{ edition.date }} / {{ data.source }} / {{ seasonLabel }}
+        </p>
+      </div>
+      <nav class="controls" aria-label="Editions">
+        <button :disabled="!prevDate" aria-label="Previous week" @click="toEdition(prevDate)">←</button>
+        <select
+          aria-label="Week"
+          :value="edition.date"
+          @change="toEdition(($event.target as HTMLSelectElement).value)"
+        >
+          <option v-for="d in dates" :key="d.date" :value="d.date">
+            WK {{ d.week }} — {{ d.date }}
+          </option>
+        </select>
+        <button :disabled="!nextDate" aria-label="Next week" @click="toEdition(nextDate)">→</button>
       </nav>
-    </header>
+    </div>
 
-    <table class="rank-table">
-      <thead>
-        <tr>
-          <th class="num">Rank</th>
-          <th>Wrestler</th>
-          <th>School</th>
-          <th>Grade</th>
-          <th class="num">Move</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="row in edition.entries" :key="`${row.rank}-${row.name}`">
-          <td class="num rank">{{ row.rank }}</td>
-          <td>{{ row.name }}</td>
-          <td>{{ row.school }}</td>
-          <td>{{ row.grade }}</td>
-          <td class="num"><MovementBadge :rank="row.rank" :prev-rank="row.prevRank" /></td>
-        </tr>
-      </tbody>
-    </table>
+    <div class="board">
+      <table>
+        <thead>
+          <tr>
+            <th class="num">RK</th>
+            <th>Wrestler</th>
+            <th>School</th>
+            <th>YR</th>
+            <th class="num">Move</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in edition.entries" :key="`${row.rank}-${row.name}`">
+            <td class="num rank" :class="{ top: row.rank <= 3 }">{{ row.rank }}</td>
+            <td class="name">{{ row.name }}</td>
+            <td class="school">{{ row.school }}</td>
+            <td class="grade">{{ row.grade }}</td>
+            <td class="num"><MovementBadge :rank="row.rank" :prev-rank="row.prevRank" /></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 </template>
-
-<style scoped>
-.edition-header h1 {
-  margin: 0 0 0.25rem;
-}
-
-.edition-meta {
-  margin: 0;
-  color: var(--muted);
-}
-
-.edition-nav {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin: 1rem 0;
-}
-
-.edition-nav button {
-  padding: 0.25rem 0.6rem;
-  border: 1px solid var(--line);
-  border-radius: 0.25rem;
-  background: var(--bg);
-  cursor: pointer;
-}
-
-.edition-nav button:disabled {
-  color: var(--muted);
-  cursor: default;
-}
-
-.edition-nav select {
-  padding: 0.2rem 0.3rem;
-}
-</style>
