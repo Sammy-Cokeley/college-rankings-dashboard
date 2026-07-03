@@ -423,3 +423,26 @@ a {
   text-decoration: underline;
   text-decoration-style: dotted;
 }
+
+/* Below-the-fold rows: hidden, not removed — SSR HTML keeps every name. */
+.board tbody tr.folded {
+  display: none;
+}
+
+.fold-toggle button {
+  display: block;
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--thead);
+  border: none;
+  padding: 0.55rem;
+  cursor: pointer;
+}
+
+.fold-toggle button:hover {
+  color: var(--ink);
+}

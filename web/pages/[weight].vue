@@ -83,6 +83,35 @@ function rowSelectionIndex(wrestlerId: number | null): number {
   return wrestlerId === null ? -1 : selected.value.indexOf(wrestlerId)
 }
 
+// --- table fold (top 10 visible, rest behind "see more") --------------------
+
+const FOLD_RANK = 10
+
+// Cut by rank, not row count, so a tie at the fold never gets half-hidden.
+// Hidden rows stay in the DOM (CSS display:none) — SSR HTML keeps all names.
+const foldedCount = computed(() => edition.value.entries.filter((r) => r.rank > FOLD_RANK).length)
+
+function selectionBelowFold(): boolean {
+  const sel = new Set(selected.value)
+  return edition.value.entries.some((r) => r.wrestlerId !== null && sel.has(r.wrestlerId) && r.rank > FOLD_RANK)
+}
+
+// Initialized identically on server and client (both derive from the same
+// route + payload), so a ?sel= deep link to a below-fold wrestler SSRs the
+// table already expanded — no hydration mismatch.
+const expanded = ref(selectionBelowFold())
+
+// Pinning a hidden wrestler later (e.g. clicking their line in the chart)
+// reveals their row; collapsing again is always manual.
+watch(selected, () => {
+  if (!expanded.value && selectionBelowFold()) expanded.value = true
+})
+
+// Fresh weight page = fresh fold.
+watch(weight, () => {
+  expanded.value = selectionBelowFold()
+})
+
 // --- edition navigation ------------------------------------------------------
 
 function toEdition(date: string | null) {
@@ -138,22 +167,6 @@ useSeoMeta({
       </nav>
     </div>
 
-    <section v-if="seriesData && seriesData.series.length" class="chart-panel board">
-      <header class="chart-head">
-        <h2>Season trajectory</h2>
-        <p class="hint">
-          Hover a line to identify it. Click a line or a table row to pin a wrestler; click a
-          school to pin the whole room.
-        </p>
-      </header>
-      <TrajectoryChart
-        :weeks="seriesData.weeks"
-        :series="seriesData.series"
-        :selected="selected"
-        @toggle="toggleWrestler"
-      />
-    </section>
-
     <div class="board">
       <table>
         <thead>
@@ -170,7 +183,10 @@ useSeoMeta({
             v-for="row in edition.entries"
             :key="`${row.rank}-${row.name}`"
             class="selectable"
-            :class="{ selected: rowSelectionIndex(row.wrestlerId) >= 0 }"
+            :class="{
+              selected: rowSelectionIndex(row.wrestlerId) >= 0,
+              folded: !expanded && row.rank > FOLD_RANK,
+            }"
             :style="rowSelectionIndex(row.wrestlerId) >= 0
               ? { '--row-accent': `var(--chart-${rowSelectionIndex(row.wrestlerId) % 6})` }
               : undefined"
@@ -184,6 +200,27 @@ useSeoMeta({
           </tr>
         </tbody>
       </table>
+      <div v-if="foldedCount > 0" class="fold-toggle">
+        <button @click="expanded = !expanded">
+          {{ expanded ? `Show top ${FOLD_RANK} ▴` : `See all ${edition.entries.length} ranked ▾` }}
+        </button>
+      </div>
     </div>
+
+    <section v-if="seriesData && seriesData.series.length" class="chart-panel board">
+      <header class="chart-head">
+        <h2>Season trajectory</h2>
+        <p class="hint">
+          Hover a line to identify it. Click a line or a table row to pin a wrestler; click a
+          school to pin the whole room.
+        </p>
+      </header>
+      <TrajectoryChart
+        :weeks="seriesData.weeks"
+        :series="seriesData.series"
+        :selected="selected"
+        @toggle="toggleWrestler"
+      />
+    </section>
   </div>
 </template>
