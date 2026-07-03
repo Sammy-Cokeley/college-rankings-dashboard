@@ -44,6 +44,13 @@
   --accent-ink: #0c0f14; /* text on a gold chip */
   --up: #37d67a;
   --down: #ff5d5d;
+  /* bump-chart selection palette (assigned by selection order) */
+  --chart-0: #f2b21b;
+  --chart-1: #37d67a;
+  --chart-2: #6ea8fe;
+  --chart-3: #c084fc;
+  --chart-4: #ff8f5e;
+  --chart-5: #4dd4d4;
   --font-body: 'Space Grotesk', system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
 }
@@ -59,6 +66,12 @@
   --accent: #8a5f00; /* bronze: gold that survives a white background */
   --up: #0e7a43;
   --down: #c92a2a;
+  --chart-0: #8a5f00;
+  --chart-1: #0e7a43;
+  --chart-2: #1d5dcf;
+  --chart-3: #8b3fd6;
+  --chart-4: #c14e1d;
+  --chart-5: #0d7d7d;
 }
 
 /* System preference applies only when the user hasn't chosen explicitly. */
@@ -74,6 +87,12 @@
     --accent: #8a5f00;
     --up: #0e7a43;
     --down: #c92a2a;
+    --chart-0: #8a5f00;
+    --chart-1: #0e7a43;
+    --chart-2: #1d5dcf;
+    --chart-3: #8b3fd6;
+    --chart-4: #c14e1d;
+    --chart-5: #0d7d7d;
   }
 }
 
@@ -263,6 +282,36 @@ a {
   white-space: nowrap;
 }
 
+/* --- Season trajectory chart panel ------------------------------------ */
+
+.chart-panel {
+  padding: 0.9rem 1rem 0.4rem;
+}
+
+.chart-head {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.4rem;
+}
+
+.chart-head h2 {
+  margin: 0;
+  font-size: 0.8rem;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.chart-head .hint {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
 /* --- Rankings board table -------------------------------------------- */
 
 .board {
@@ -354,4 +403,23 @@ a {
   color: var(--muted);
   font-family: var(--font-mono);
   font-size: 0.82rem;
+}
+
+/* Rows that drive the trajectory chart selection */
+.board tbody tr.selectable {
+  cursor: pointer;
+}
+
+.board tbody tr.selected td {
+  background: var(--surface-hover);
+}
+
+.board tbody tr.selected td:first-child {
+  box-shadow: inset 3px 0 0 var(--row-accent, var(--accent));
+}
+
+.board td.school-toggle:hover {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-style: dotted;
 }

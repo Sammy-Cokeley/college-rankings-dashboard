@@ -9,6 +9,7 @@ import {
   getSourceId,
   latestDate,
   listDates,
+  seasonSeries,
   type Db,
 } from '../server/utils/queries'
 
@@ -77,7 +78,9 @@ beforeAll(() => {
     [d4]: [
       [1, 1, 'Arn', 'Iowa', 'SR'],
       [2, 2, 'Boe', 'Penn State', 'JR'],
-      [4, 3, 'Dye', 'Ohio State', 'FR'],
+      // School string drifts in the final edition: a series must surface the
+      // latest raw spelling, while each entry keeps its own verbatim.
+      [4, 3, 'Dye', 'Ohio St.', 'FR'],
       [3, 5, 'Cox', 'Cornell', 'SO'],
       [6, 6, 'Fox', 'Minnesota', 'SR'],
       [5, 6, 'Eck', 'Michigan', 'JR'],
@@ -184,5 +187,63 @@ describe('editionEntries', () => {
 
   it('returns empty for a date with no snapshot', () => {
     expect(editionEntries(db as Db, SRC, W, SEASON, '1999-01-01')).toEqual([])
+  })
+
+  it('carries the canonical wrestlerId (null when unresolved)', () => {
+    const rows = editionEntries(db as Db, SRC, W, SEASON, d1)
+    const byName = Object.fromEntries(rows.map((r) => [r.name, r.wrestlerId]))
+    expect(byName['Arn']).toBe(1)
+    expect(byName['Mystery Guy']).toBeNull()
+  })
+})
+
+describe('seasonSeries', () => {
+  it('builds one series per resolved wrestler, in first-appearance order', () => {
+    const series = seasonSeries(db as Db, SRC, W, SEASON)
+    expect(series.map((s) => s.name)).toEqual(['Arn', 'Boe', 'Cox', 'Dye', 'Eck', 'Fox'])
+  })
+
+  it('maps ranks onto derived week numbers', () => {
+    const series = seasonSeries(db as Db, SRC, W, SEASON)
+    const arn = series.find((s) => s.name === 'Arn')!
+    expect(arn.points).toEqual([
+      { week: 1, rank: 1 },
+      { week: 2, rank: 2 },
+      { week: 3, rank: 1 },
+      { week: 4, rank: 1 },
+    ])
+  })
+
+  it('leaves a gap (no point) for a skipped week — never interpolates', () => {
+    const series = seasonSeries(db as Db, SRC, W, SEASON)
+    const cox = series.find((s) => s.name === 'Cox')!
+    expect(cox.points).toEqual([
+      { week: 1, rank: 3 },
+      { week: 2, rank: 3 },
+      { week: 4, rank: 5 },
+    ])
+  })
+
+  it('keeps both wrestlers of a tied rank as separate series points', () => {
+    const series = seasonSeries(db as Db, SRC, W, SEASON)
+    const eck = series.find((s) => s.name === 'Eck')!
+    const fox = series.find((s) => s.name === 'Fox')!
+    expect(eck.points).toEqual([{ week: 4, rank: 6 }])
+    expect(fox.points).toEqual([{ week: 4, rank: 6 }])
+  })
+
+  it('excludes unresolved (NULL wrestler_id) entries — no identity, no line', () => {
+    const series = seasonSeries(db as Db, SRC, W, SEASON)
+    expect(series.some((s) => s.name.startsWith('Mystery'))).toBe(false)
+  })
+
+  it('surfaces the latest raw name/school spelling on the series', () => {
+    const series = seasonSeries(db as Db, SRC, W, SEASON)
+    const dye = series.find((s) => s.wrestlerId === 4)!
+    expect(dye.school).toBe('Ohio St.') // drifted in d4; entries keep verbatim
+  })
+
+  it('returns empty for a weight with no snapshots', () => {
+    expect(seasonSeries(db as Db, SRC, 157, SEASON)).toEqual([])
   })
 })
