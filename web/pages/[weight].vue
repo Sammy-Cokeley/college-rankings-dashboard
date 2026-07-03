@@ -107,8 +107,12 @@ watch(selected, () => {
   if (!expanded.value && selectionBelowFold()) expanded.value = true
 })
 
-// Fresh weight page = fresh fold.
-watch(weight, () => {
+// Fresh weight page = fresh fold. Keyed off the payload's weight, not the
+// route param: the param flips before useFetch resolves, so a route-keyed
+// reset would evaluate the fold against the OUTGOING weight's entries. If
+// the series payload (and thus a still-valid ?sel=) lands after this reset,
+// the selected watcher above re-expands — the two converge on fresh data.
+watch(() => edition.value.weight, () => {
   expanded.value = selectionBelowFold()
 })
 

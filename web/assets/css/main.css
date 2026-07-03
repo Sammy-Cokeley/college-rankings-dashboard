@@ -429,6 +429,13 @@ a {
   display: none;
 }
 
+/* The DOM's last row is a hidden folded one while collapsed, so the
+   last-child border suppression misses the last VISIBLE row — drop the
+   border on the row that sits directly above the fold toggle instead. */
+.board tbody tr:not(.folded):has(+ tr.folded) td {
+  border-bottom: none;
+}
+
 .fold-toggle button {
   display: block;
   width: 100%;
