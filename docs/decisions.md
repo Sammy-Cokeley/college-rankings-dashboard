@@ -76,9 +76,16 @@ roughly doubles v1 vs the launch set alone — accepted explicitly.)_
   *older* history only. Frictions accepted with eyes open: the site 403s
   non-browser clients (active bot protection), and rankings are per-article
   HTML (no container model — per-article scraping, format-drift risk).
-  - **Gate: bot-protection recon is the first v1 task.** If InterMat scraping
-    proves impractical, NWCA Coaches Poll (public, ncaa.com) is the pre-agreed
-    fallback; the multi-source machinery is built source-agnostic either way.
+  - **Gate: RESOLVED GO.** _(2026-07-04, recon — see `sources/intermat.md`,
+    which supersedes the technical picture above.)_ The 403 is AI-crawler UA
+    blocklisting only — plain Go `net/http` passes, no headless browser. The
+    scoping assumptions were wrong in both directions: weekly articles are
+    commentary-only (no ranked lists), and the lists live in a structured
+    rankings record that is replaced weekly and *deleted* — but the Wayback
+    Machine snapshotted every 2025-26 weekly record, so backfill comes from
+    archive.org with zero InterMat traffic, and in-season is ~2 polite
+    requests/week (RSS poll + record fetch, honoring `Crawl-Delay: 20`).
+    NWCA fallback not needed.
   - **Posture mitigation:** attribute prominently and link every ranking back
     to InterMat — consistent with the neutral-presentation stance above.
 - **Outreach-first strategy: superseded.** _(2026-07-04.)_ The prior plan —
