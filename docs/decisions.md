@@ -14,6 +14,42 @@ when a decision changes; note the date and the reason.
 - **Goal is the fan experience, not personal recognition.** Build something
   fans enjoy; spotlight is not the driver. (Recorded because it shapes how much
   weight to give the relationship/competitive politics below: low, by choice.)
+## v1 scope
+ 
+_(decided 2026-07-04, scoping session. Framing question: what does a stranger
+need on day one of the live season for this site to be worth bookmarking over
+Flo's own list? Theme: **"first live season, multi-source."** Multi-source
+roughly doubles v1 vs the launch set alone — accepted explicitly.)_
+ 
+**In v1** (sequenced):
+1. InterMat bot-protection recon — the gate; decides InterMat vs NWCA fallback
+2. Minimal .vue component test harness (enabler for the template-heavy work;
+   `[weight].vue` fold/selection logic is untested)
+3. Mobile pass, with keyboard a11y (sortable headers, row toggles) folded in
+4. Cross-weight movement annotation (see Movement display below)
+5. InterMat scraper + resolution; backfill 2025-26 articles as the fixed
+   validation corpus, mirroring the Flo approach (see Sources below)
+6. Multi-source display design + build (open design problem; stays
+   neutral/positive — see Analytics above)
+7. Real home page (after multi-source, so it can show both sources)
+8. Register ranklines.com; rename + og:image/share meta (see Web UI below)
+9. In-season ops: Pi cron, new-season Flo container discovery, weekly InterMat
+   article discovery, minimal failure/anomaly notification (surface the
+   existing `ingest.Result.Anomalies` signal) + Pi deploy — live before
+   October. With a second source published live, ops IS the product being
+   live; "a late start backfills" holds for data completeness, not for a
+   stranger landing mid-season.
+ 
+**NOT in v1** (explicit cuts, not oversights):
+- Conference filter on the bump chart — coupled to the curated
+  school→conference dimension; build it alongside the `schools`/
+  `school_aliases` work the second source forces, as v2 follow-on.
+- Wrestler pages — today a thin wrapper over bump-chart `?sel=` selection;
+  their moment is after cross-weight + multi-source data matures.
+- Adversarial cross-source analytics — stays deferred (above); NOT unlocked
+  merely because two sources exist.
+- NWCA as a displayed source — fallback only, if the InterMat gate fails.
+- InterMat outreach — superseded (see Sources below).
 ## Sources
  
 - **v0: FloWrestling — current *and* full historical weekly rankings.** Available
@@ -31,22 +67,32 @@ when a decision changes; note the date and the reason.
     made it unnecessary — Flo itself carries the historical *rankings*. Match
     results may return later as independent ground-truth to sanity-check rankings,
     but they are out of v0 scope.
-- **InterMat: deferred.** Owned by MatScouts (Willie Saylor). Current college
-  rankings post on the InterMat site, but the historical archive lives on Rokfin
-  and is partly subscription-gated — scraping gated content is worse posture
-  than public pages, so InterMat's history realistically needs a relationship,
-  not a scraper.
-- **Outreach is a disclosure.** InterMat's owner is partnered with an
-  established competitor in this space (a builder of exactly these kinds of
-  boards). Telling InterMat "I'm building this" is effectively telling that
-  competitor. If/when approaching: build a finished-looking demo first (on Flo /
-  public data, not on scraped InterMat data), frame it as driving traffic TO
-  their rankings, and be ready to move fast afterward. Decision for now: build
-  quietly on Flo + public data; revisit InterMat from a position of a working
-  product.
-- Other sources (NWCA Coaches Poll on ncaa.com, The Open Mat) are public and
-  could be added later if a multi-source view is wanted; two sources is thin for
-  any "consensus" framing but fine for display.
+- **InterMat: v1 second source — quiet-scrape, published at launch.** _(REVERSED
+  2026-07-04; was "deferred". Owner context below still true: MatScouts /
+  Willie Saylor.)_ v1-scoping recon changed the technical picture: the full
+  2025-26 season of weekly "NCAA DI Rankings Updated" articles is publicly
+  listed on intermatwrestle.com — so backfill + a fixed validation corpus are
+  public, mirroring the Flo approach; the Rokfin subscription-gating applies to
+  *older* history only. Frictions accepted with eyes open: the site 403s
+  non-browser clients (active bot protection), and rankings are per-article
+  HTML (no container model — per-article scraping, format-drift risk).
+  - **Gate: bot-protection recon is the first v1 task.** If InterMat scraping
+    proves impractical, NWCA Coaches Poll (public, ncaa.com) is the pre-agreed
+    fallback; the multi-source machinery is built source-agnostic either way.
+  - **Posture mitigation:** attribute prominently and link every ranking back
+    to InterMat — consistent with the neutral-presentation stance above.
+- **Outreach-first strategy: superseded.** _(2026-07-04.)_ The prior plan —
+  build a finished demo on Flo/public data, then approach Saylor framing the
+  site as driving traffic to InterMat, publishing InterMat data only after a
+  yes — is no longer a precondition. Decision: scrape the public articles and
+  publish at launch, accepting that detected scraper traffic likely poisons any
+  future relationship, and that Saylor's competitor partnership means outreach
+  was always a disclosure anyway. (Original disclosure analysis kept for the
+  record: InterMat's owner is partnered with an established competitor building
+  exactly these kinds of boards, so any approach is effectively telling them.)
+- Other sources: NWCA Coaches Poll (ncaa.com) is the designated **fallback
+  second source** if the InterMat gate fails; The Open Mat remains unplanned.
+  Two sources is thin for any "consensus" framing but fine for display.
 ## Stack
  
 - **Monorepo, monolith runtime.** Monorepo = repo layout (correct for a solo dev
@@ -76,8 +122,9 @@ when a decision changes; note the date and the reason.
   language-neutral SQL migrations.
 ## Movement display
  
-- **Movement is per-weight; cross-weight context is deferred.** _(decided
-  2026-07-02, with the web v0.)_ The displayed movement is LAG over
+- **Movement is per-weight.** _(decided 2026-07-02, with the web v0;
+  cross-weight context was deferred then — promoted to v1 below.)_ The
+  displayed movement is LAG over
   `published_date` partitioned by source/weight/season/wrestler (`schema.md`
   §5). A mid-season weight change therefore shows as either **NEW** (never
   ranked at the new weight) or movement from the wrestler's *last edition at
@@ -88,27 +135,35 @@ when a decision changes; note the date and the reason.
   This is the single divergence from Flo's column in 6421 comparisons
   (`sources/flowrestling-validation.md`), it's deliberate, and it's pinned by
   an integration test.
-- **Deferred enhancement, not a data gap:** the schema already represents
-  weight changes fully (weight lives on the snapshot, §3), and resolution ties
-  the weights to one canonical `wrestler_id` — so a future "NEW — previously
-  #24 at 165" annotation is one "last ranked at any weight, this
-  source+season" query. Held out of v0 because it's context enrichment on top
-  of week-over-week movement, it grows the API row shape, and it has real
-  edge cases (unresolved entries have no identity to follow; per-source only;
-  "current weight" is ambiguous in the week both weights' lists include the
-  wrestler, since editions publish on different dates).
+- **Cross-weight annotation: promoted to v1.** _(2026-07-04; was a deferred
+  enhancement.)_ Not a data gap: the schema already represents weight changes
+  fully (weight lives on the snapshot, §3), and resolution ties the weights to
+  one canonical `wrestler_id` — the "NEW — previously #24 at 165" annotation
+  is one "last ranked at any weight, this source+season" query. Promoted
+  because it is the single place Flo's presentation beats ours (their
+  Previous column shows `24 (165)`; we show a bare NEW), which fails the
+  "worth bookmarking over Flo" test. The known edge cases become acceptance
+  criteria, not blockers: unresolved entries have no identity to follow;
+  per-source only; "current weight" is ambiguous in the week both weights'
+  lists include the wrestler (editions publish on different dates).
 ## Web UI
  
 - **The "All Weights" dashboard is NOT the intended home page.** _(noted
   2026-07-02.)_ The flat all-weights table at `/` is a useful power-user tool
   but a weak front door; it exists because v0 needed a landing surface, not
   because it won a design. A proper home page (shape TBD — e.g. latest-week
-  summary, biggest movers, weight-class entry points) is future work. Keep the
-  all-weights table reachable when that lands; don't grow features into it in
-  the meantime on the assumption it stays the home page.
-- **Site naming is open.** Mockup brands ("MatBoard" etc.) were placeholders;
-  the visual identity work styles the existing descriptive title until a real
-  name is chosen.
+  summary, biggest movers, weight-class entry points) is **v1 work** _(promoted
+  2026-07-04)_, sequenced after the multi-source display so it can show both
+  sources. Keep the all-weights table reachable when that lands; don't grow
+  features into it in the meantime on the assumption it stays the home page.
+- **Site name: Ranklines (ranklines.com).** _(decided 2026-07-04.)_ Chosen in
+  the v1 scoping session from a DNS-checked shortlist (no A record on
+  2026-07-04; verify + register at a registrar before the rename/og work —
+  DNS absence is a signal, not a guarantee). Named for the product itself: the
+  season bump chart's rank lines, which are also the natural logo motif.
+  Runners-up: MatMovement, MatTrends, WeighInWeekly. Mockup brands
+  ("MatBoard" etc.) were placeholders and are dead. og:image + share meta
+  follow the registration.
 - **Season trajectory = full-weight bump chart; conference filter deferred.**
   _(2026-07-03.)_ The weight page charts every resolved wrestler's
   rank-over-week line (SSR SVG, no chart library); single wrestlers/groups are
