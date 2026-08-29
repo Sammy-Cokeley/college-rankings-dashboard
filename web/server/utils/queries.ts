@@ -1,55 +1,56 @@
-import type DatabaseConstructor from 'better-sqlite3'
+import type postgres from 'postgres'
 import type { EditionDate, RankingRow, WrestlerSeries } from '../../types/rankings'
 
-export type Db = InstanceType<typeof DatabaseConstructor>
+export type Db = postgres.Sql
 
-// getSeason returns the newest season in the store, or null when empty.
-// v0 is single-season; the newest one is what the site shows.
-export function getSeason(db: Db): number | null {
-  const row = db.prepare('SELECT MAX(season) AS season FROM snapshots').get() as {
-    season: number | null
-  }
-  return row.season
+// getSeason returns the newest season for one source, or null when that
+// source has no snapshots yet. Scoped to sourceId, not global — sources
+// don't share a season number in lockstep (e.g. FloWrestling's newest season
+// is last year's completed backfill, 2026, while the Fan Poll's is the
+// current roster season, 2027; schema.md §10). An unscoped MAX(season)
+// worked by accident in v0 (exactly one source existed), and would silently
+// point every source at whichever one happened to have the newest data.
+export async function getSeason(db: Db, sourceId: number): Promise<number | null> {
+  const rows = await db<{ season: number | null }[]>`
+    SELECT MAX(season) AS season FROM snapshots WHERE source_id = ${sourceId}`
+  return rows[0]?.season ?? null
 }
 
 // getSourceId resolves a source by its seeded canonical name.
-export function getSourceId(db: Db, name: string): number | null {
-  const row = db.prepare('SELECT id FROM sources WHERE name = ?').get(name) as
-    | { id: number }
-    | undefined
-  return row?.id ?? null
+export async function getSourceId(db: Db, name: string): Promise<number | null> {
+  const rows = await db<{ id: number }[]>`SELECT id FROM sources WHERE name = ${name}`
+  return rows[0]?.id ?? null
 }
 
 // listDates returns every edition date for one source/weight/season, ascending,
 // with the display week derived as the 1-based position (schema.md §4: the
 // published_date is the time spine; week numbers are an app-level label).
-export function listDates(db: Db, sourceId: number, weight: number, season: number): EditionDate[] {
-  const rows = db
-    .prepare(
-      `SELECT DISTINCT published_date AS date
-       FROM snapshots
-       WHERE source_id = ? AND weight_class = ? AND season = ?
-       ORDER BY published_date`,
-    )
-    .all(sourceId, weight, season) as Array<{ date: string }>
-  return rows.map((r, i) => ({ date: r.date, week: i + 1 }))
-}
-
-// latestDate returns the newest edition date for one source/weight/season.
-export function latestDate(
+export async function listDates(
   db: Db,
   sourceId: number,
   weight: number,
   season: number,
-): string | null {
-  const row = db
-    .prepare(
-      `SELECT MAX(published_date) AS date
-       FROM snapshots
-       WHERE source_id = ? AND weight_class = ? AND season = ?`,
-    )
-    .get(sourceId, weight, season) as { date: string | null }
-  return row.date
+): Promise<EditionDate[]> {
+  const rows = await db<{ date: string }[]>`
+    SELECT DISTINCT published_date AS date
+    FROM snapshots
+    WHERE source_id = ${sourceId} AND weight_class = ${weight} AND season = ${season}
+    ORDER BY published_date`
+  return rows.map((r, i) => ({ date: r.date, week: i + 1 }))
+}
+
+// latestDate returns the newest edition date for one source/weight/season.
+export async function latestDate(
+  db: Db,
+  sourceId: number,
+  weight: number,
+  season: number,
+): Promise<string | null> {
+  const rows = await db<{ date: string | null }[]>`
+    SELECT MAX(published_date) AS date
+    FROM snapshots
+    WHERE source_id = ${sourceId} AND weight_class = ${weight} AND season = ${season}`
+  return rows[0]?.date ?? null
 }
 
 // editionEntries returns one edition's rows with each wrestler's previous rank
@@ -61,46 +62,44 @@ export function latestDate(
 // last week — matching Flo's own "Previous" column semantics.
 //
 // One deliberate divergence from the Go port: unresolved entries (NULL
-// wrestler_id) get a NULL prev_rank via CASE. SQLite's LAG lumps all NULLs
+// wrestler_id) get a NULL prev_rank via CASE. Postgres's LAG lumps all NULLs
 // into one partition, which would fabricate movement between unrelated
 // unresolved wrestlers.
-export function editionEntries(
+export async function editionEntries(
   db: Db,
   sourceId: number,
   weight: number,
   season: number,
   date: string,
-): RankingRow[] {
-  return db
-    .prepare(
-      `WITH season_entries AS (
-         SELECT s.published_date,
-                e.rank,
-                e.wrestler_id,
-                e.raw_source_string,
-                e.raw_school,
-                e.raw_grade,
-                CASE WHEN e.wrestler_id IS NULL THEN NULL ELSE
-                  LAG(e.rank) OVER (
-                    PARTITION BY s.source_id, s.weight_class, s.season, e.wrestler_id
-                    ORDER BY s.published_date
-                  )
-                END AS prev_rank
-         FROM ranking_entries e
-         JOIN snapshots s ON s.id = e.snapshot_id
-         WHERE s.source_id = ? AND s.weight_class = ? AND s.season = ?
-       )
-       SELECT rank,
-              raw_source_string AS name,
-              raw_school        AS school,
-              raw_grade         AS grade,
-              prev_rank         AS prevRank,
-              wrestler_id       AS wrestlerId
-       FROM season_entries
-       WHERE published_date = ?
-       ORDER BY rank, raw_source_string`,
+): Promise<RankingRow[]> {
+  const rows = await db<RankingRow[]>`
+    WITH season_entries AS (
+      SELECT s.published_date,
+             e.rank,
+             e.wrestler_id,
+             e.raw_source_string,
+             e.raw_school,
+             e.raw_grade,
+             CASE WHEN e.wrestler_id IS NULL THEN NULL ELSE
+               LAG(e.rank) OVER (
+                 PARTITION BY s.source_id, s.weight_class, s.season, e.wrestler_id
+                 ORDER BY s.published_date
+               )
+             END AS prev_rank
+      FROM ranking_entries e
+      JOIN snapshots s ON s.id = e.snapshot_id
+      WHERE s.source_id = ${sourceId} AND s.weight_class = ${weight} AND s.season = ${season}
     )
-    .all(sourceId, weight, season, date) as RankingRow[]
+    SELECT rank,
+           raw_source_string AS name,
+           raw_school        AS school,
+           raw_grade         AS grade,
+           prev_rank         AS "prevRank",
+           wrestler_id       AS "wrestlerId"
+    FROM season_entries
+    WHERE published_date = ${date}
+    ORDER BY rank, raw_source_string`
+  return rows
 }
 
 // seasonSeries groups a whole weight/season into one rank-over-week line per
@@ -110,33 +109,35 @@ export function editionEntries(
 // derivation as listDates; a week a wrestler went unranked is simply absent
 // from points (render as a gap, never interpolate). name/school are the
 // latest raw spellings, for labeling only.
-export function seasonSeries(
+export async function seasonSeries(
   db: Db,
   sourceId: number,
   weight: number,
   season: number,
-): WrestlerSeries[] {
-  const rows = db
-    .prepare(
-      `SELECT s.published_date AS date,
-              e.rank,
-              e.wrestler_id       AS wrestlerId,
-              e.raw_source_string AS name,
-              e.raw_school        AS school
-       FROM ranking_entries e
-       JOIN snapshots s ON s.id = e.snapshot_id
-       WHERE s.source_id = ? AND s.weight_class = ? AND s.season = ? AND e.wrestler_id IS NOT NULL
-       ORDER BY s.published_date, e.rank, e.raw_source_string`,
-    )
-    .all(sourceId, weight, season) as Array<{
-    date: string
-    rank: number
-    wrestlerId: number
-    name: string
-    school: string | null
-  }>
+): Promise<WrestlerSeries[]> {
+  const rows = await db<
+    Array<{
+      date: string
+      rank: number
+      wrestlerId: number
+      name: string
+      school: string | null
+    }>
+  >`
+    SELECT s.published_date AS date,
+           e.rank,
+           e.wrestler_id       AS "wrestlerId",
+           e.raw_source_string AS name,
+           e.raw_school        AS school
+    FROM ranking_entries e
+    JOIN snapshots s ON s.id = e.snapshot_id
+    WHERE s.source_id = ${sourceId} AND s.weight_class = ${weight} AND s.season = ${season}
+      AND e.wrestler_id IS NOT NULL
+    ORDER BY s.published_date, e.rank, e.raw_source_string`
 
-  const weekByDate = new Map(listDates(db, sourceId, weight, season).map((d) => [d.date, d.week]))
+  const weekByDate = new Map(
+    (await listDates(db, sourceId, weight, season)).map((d) => [d.date, d.week]),
+  )
 
   const byWrestler = new Map<number, WrestlerSeries>()
   for (const row of rows) {

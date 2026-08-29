@@ -5,8 +5,6 @@ import (
 	"database/sql"
 	"path/filepath"
 	"testing"
-
-	_ "modernc.org/sqlite"
 )
 
 // repo-root-relative dirs, from pipeline/internal/store.
@@ -15,27 +13,14 @@ var (
 	seedDir       = filepath.Join("..", "..", "..", "db", "seed")
 )
 
-// TestStoreSmoke exercises the full store contract against a temp DB: apply
-// migrations + seed, insert two consecutive snapshots for one weight class
-// (with a wrestler who only appears in the second), read them back, and verify
-// MovementForWeight derives the right previous ranks — including the
-// NULL-previous-rank case for a newcomer.
+// TestStoreSmoke exercises the full store contract against a fresh Postgres
+// schema (freshDB, testdb_test.go): apply migrations + seed, insert two
+// consecutive snapshots for one weight class (with a wrestler who only appears
+// in the second), read them back, and verify MovementForWeight derives the
+// right previous ranks — including the NULL-previous-rank case for a newcomer.
 func TestStoreSmoke(t *testing.T) {
 	ctx := context.Background()
-	dbPath := filepath.Join(t.TempDir(), "test.db")
-
-	db, err := Open(dbPath)
-	if err != nil {
-		t.Fatalf("open: %v", err)
-	}
-	defer db.Close()
-
-	if err := ApplyMigrations(ctx, db, migrationsDir); err != nil {
-		t.Fatalf("migrations: %v", err)
-	}
-	if err := ApplySeeds(ctx, db, seedDir); err != nil {
-		t.Fatalf("seeds: %v", err)
-	}
+	db := freshDB(t)
 
 	// Seed landed.
 	var sourceID int64
@@ -59,13 +44,13 @@ func TestStoreSmoke(t *testing.T) {
 
 	// A school and three wrestlers to reference from entries.
 	schoolID := mustExec(t, ctx, db,
-		`INSERT INTO schools (name, division) VALUES ('Iowa', 'DI')`)
+		`INSERT INTO schools (name, division) VALUES ('Iowa', 'DI') RETURNING id`)
 	alice := mustExec(t, ctx, db,
-		`INSERT INTO wrestlers (full_name, current_school_id, eligibility_year) VALUES ('Alice Adams', ?, 'SR')`, schoolID)
+		`INSERT INTO wrestlers (full_name, current_school_id, eligibility_year) VALUES ('Alice Adams', $1, 'SR') RETURNING id`, schoolID)
 	bob := mustExec(t, ctx, db,
-		`INSERT INTO wrestlers (full_name, current_school_id, eligibility_year) VALUES ('Bob Barnes', ?, 'JR')`, schoolID)
+		`INSERT INTO wrestlers (full_name, current_school_id, eligibility_year) VALUES ('Bob Barnes', $1, 'JR') RETURNING id`, schoolID)
 	cara := mustExec(t, ctx, db,
-		`INSERT INTO wrestlers (full_name, current_school_id, eligibility_year) VALUES ('Cara Cole', ?, 'FR')`, schoolID)
+		`INSERT INTO wrestlers (full_name, current_school_id, eligibility_year) VALUES ('Cara Cole', $1, 'FR') RETURNING id`, schoolID)
 
 	const weight, season = 125, 2026
 
@@ -175,15 +160,16 @@ func assertNoPrev(t *testing.T, label string, m Movement, wantRank int) {
 	}
 }
 
+// mustExec runs a RETURNING-id insert and returns the new id. Postgres has no
+// LastInsertId, so test fixture setup uses RETURNING directly rather than
+// going through the store package's own insert helpers (which don't exist for
+// schools/wrestlers-with-explicit-school, since v0 resolution never sets
+// current_school_id — see wrestlers.go).
 func mustExec(t *testing.T, ctx context.Context, db *sql.DB, query string, args ...any) int64 {
 	t.Helper()
-	res, err := db.ExecContext(ctx, query, args...)
-	if err != nil {
+	var id int64
+	if err := db.QueryRowContext(ctx, query, args...).Scan(&id); err != nil {
 		t.Fatalf("exec %q: %v", query, err)
-	}
-	id, err := res.LastInsertId()
-	if err != nil {
-		t.Fatal(err)
 	}
 	return id
 }

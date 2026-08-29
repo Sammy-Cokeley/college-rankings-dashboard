@@ -30,7 +30,20 @@ roughly doubles v1 vs the launch set alone — accepted explicitly.)_
 5. InterMat scraper + resolution; backfill 2025-26 articles as the fixed
    validation corpus, mirroring the Flo approach (see Sources below)
 6. Multi-source display design + build (open design problem; stays
-   neutral/positive — see Analytics above)
+   neutral/positive — see Analytics above). **Partially pre-empted
+   (2026-07-28):** the Fan Poll feature became this site's second source
+   before InterMat did, and its display-integration phase had to solve the
+   exact same "one hardcoded source" problem to show poll results at all —
+   see `web/utils/sources.ts` (`SOURCES`/`resolveSource`, a `?source=` query
+   param every rankings route now honors) and `server/utils/queries.ts`
+   (`getSeason` scoped per source, not global — sources don't share a season
+   number, e.g. Fan Poll's current roster season vs FloWrestling's completed
+   backfill). InterMat's display work should extend that registry (add one
+   `SOURCES` entry + a seeded `sources` row), not rebuild source selection.
+   The open part still remaining: the actual multi-source UI/UX design (tabs
+   were the minimum to prove the plumbing works, not a considered design) and
+   whatever cross-source presentation questions come up once InterMat's real
+   data exists.
 7. Real home page (after multi-source, so it can show both sources)
 8. Register ranklines.com; rename + og:image/share meta (see Web UI below)
 9. In-season ops: Pi cron, new-season Flo container discovery, weekly InterMat
@@ -93,6 +106,16 @@ roughly doubles v1 vs the launch set alone — accepted explicitly.)_
 - Other sources: NWCA Coaches Poll (ncaa.com) is the designated **fallback
   second source** if the InterMat gate fails; The Open Mat remains unplanned.
   Two sources is thin for any "consensus" framing but fine for display.
+- **WrestleStat: roster source for the Fan Poll ballot builder.** _(2026-07-28
+  — see `sources/wrestlestat.md` for the full recon.)_ Not a ranking source —
+  feeds the wrestler pool users pick from when building a ballot. Technically
+  easy (plain server-rendered HTML, weight class already on every roster row,
+  no bot-challenge), but `robots.txt` specifically disallows `ClaudeBot`
+  alongside several other AI crawlers, while allowing crawlers generally and
+  stating a `use=reference` content-signal policy. **Decision: scrape anyway**
+  — a low-volume roster lookup feeding a ballot picker reads as "reference
+  use," not the model-training use the disallow most plausibly targets. Not
+  re-litigated per-scrape; recorded here once.
 ## Stack
  
 - **Monorepo, monolith runtime.** Monorepo = repo layout (correct for a solo dev
@@ -107,17 +130,40 @@ roughly doubles v1 vs the launch set alone — accepted explicitly.)_
     simpler deploy). Rejected for v0 because the dashboard's snappy client-side
     table filtering fits a reactive front end better. Revisit if the Node
     runtime on the Pi becomes annoying.
-- **DB: SQLite for v0.** _(decided 2026-06-28.)_ Tiny data + a single weekly
-  batch writer = SQLite is a single file, trivial to back up on the Pi, zero
-  ops. WAL mode gives the Nuxt side unlimited concurrent reads that never block
-  the weekly writer. Postgres is equally valid and already familiar, but its
-  operational cost (a daemon to run/monitor/`pg_dump` on the Pi) buys nothing at
-  this scale. Rationale recorded; the store layer, DSN, and schema are already
-  SQLite.
-  - *The one thing that would flip it:* if pipeline and web ever stop sharing a
-    machine and the DB must be reached over a network, SQLite is out → Postgres.
-    Nothing in v0 implies that. Port between them is an afternoon (see
-    `schema.md` Postgres deltas), so SQLite-now does not lock us in.
+- **DB: SQLite for v0 → Postgres.** _(SQLite decided 2026-06-28; reversed
+  2026-07-27.)_ SQLite's rationale held for v0: tiny data + a single weekly
+  batch writer meant a single file, trivial Pi backup, zero ops, and WAL gave
+  the Nuxt side unlimited concurrent reads that never blocked the weekly
+  writer.
+  - *The flip trigger, named in advance, fired.* This doc predicted the exact
+    condition that would flip the choice: "if pipeline and web ever stop
+    sharing a machine and the DB must be reached over a network, SQLite is
+    out." The Fan Poll feature (open public signup, many concurrent user
+    writes) forced exactly that — the platform is moving off the Pi to a
+    hosted PaaS, and PaaS deployments almost always run pipeline and web as
+    separate services with no shared local disk. Not a scope-creep decision;
+    the trigger this doc named three weeks earlier is what fired.
+  - *Port cost was as advertised.* `schema.md`'s Postgres-deltas section
+    (written the same day as the SQLite decision, precisely so this wouldn't
+    be a scramble) turned out accurate: `INTEGER PRIMARY KEY` →
+    `GENERATED ALWAYS AS IDENTITY`, drop the SQLite pragmas, everything else
+    identical. The real cost wasn't the schema — it was every hand-written
+    query's placeholder syntax (`?` → `$N`), `LastInsertId()` (no Postgres
+    equivalent; became `RETURNING id`), and the web app's DB client going from
+    synchronous (`better-sqlite3`) to async (see `web/` — every `server/api/
+    rankings/*` route and `server/utils/queries.ts` call site changed).
+  - *Driver note, for anyone repeating this:* the obvious Node driver choice,
+    `pg`, hit a real, reproducible incompatibility with this project's
+    Vite/Vitest toolchain (`pg-pool`'s internal `class BoundPool extends
+    Pool` breaks under Vite's oxc transform — "Class extends value [object
+    Module] is not a constructor"). Confirmed via a minimal repro before
+    switching, not a superstition: swapped to `postgres` (postgres.js), which
+    is ESM-native and has no such issue.
+  - Two SQLite files (rankings + a hypothetical separate community DB) were
+    briefly considered for the Fan Poll's ballots feature specifically, before
+    the whole-platform move was decided — superseded once everything is one
+    Postgres database: real foreign keys everywhere, no cross-file
+    application-level joins needed.
 - **Decoupling:** pipeline and web share only the DB; `db/` owns the schema as
   language-neutral SQL migrations.
 ## Movement display

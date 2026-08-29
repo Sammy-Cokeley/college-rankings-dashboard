@@ -38,10 +38,11 @@ Budget effort here accordingly — it dwarfs the scraping work.
  
 - Pipeline: Go
 - Web: Nuxt 3 (Vue 3, SSR)
-- DB: **SQLite** for v0 (decided 2026-06-28 — tiny data, single weekly batch
-  writer, WAL reads, trivial Pi backup, zero ops). Postgres only if pipeline and
-  web ever stop sharing a machine. See `docs/decisions.md`.
-- Deploy: self-hosted (Raspberry Pi)
+- DB: **Postgres** (migrated from SQLite 2026-07-27 — the named flip trigger,
+  pipeline and web no longer sharing a machine, fired once the Fan Poll
+  feature forced a move off the Pi. See `docs/decisions.md` Stack).
+- Deploy: hosted PaaS (moved off the Raspberry Pi 2026-07-27; the Pi remains a
+  dev/test device). See `docs/decisions.md`.
 ## Data sources (v0)
  
 - FloWrestling — guest-accessible current *and* full historical weekly rankings.

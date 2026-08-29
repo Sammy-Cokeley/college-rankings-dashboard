@@ -4,17 +4,18 @@ The store captures **weekly ranking snapshots** from multiple sources and
 reconciles wrestlers across them. Movement is *derived* from comparing
 snapshots, never stored raw.
  
-DDL below is written portably (SQLite-leaning). Postgres deltas are noted at the
-end. Pick the DB per `decisions.md`; the model is identical either way.
+DDL below is the live Postgres schema (`db/migrations/`) — see "Postgres
+migration" at the end for how it got here and what changed from the original
+SQLite version.
  
 ## Tables
  
 ```sql
--- Each ranking publisher.
+-- Each ranking publisher, or a non-ranking data source (e.g. rosters).
 CREATE TABLE sources (
   id    INTEGER PRIMARY KEY,
-  name  TEXT NOT NULL UNIQUE,          -- 'FloWrestling', 'InterMat', 'NWCA Coaches'
-  type  TEXT NOT NULL,                 -- 'editorial' | 'computer' | 'poll'
+  name  TEXT NOT NULL UNIQUE,          -- 'FloWrestling', 'InterMat', 'WrestleStat', ...
+  type  TEXT NOT NULL,                 -- 'editorial' | 'computer' | 'poll' | 'roster'
   url   TEXT
 );
  
@@ -69,6 +70,77 @@ CREATE TABLE ranking_entries (
  
 CREATE INDEX idx_entries_wrestler ON ranking_entries(wrestler_id);
 CREATE INDEX idx_aliases_lookup   ON wrestler_aliases(source_id, raw_name);
+
+-- School-name canonicalization, keyed the same way wrestler_aliases is.
+-- Introduced by the WrestleStat roster source (db/migrations/0002_roster.sql)
+-- as a proper schools/school_aliases dimension, replacing the earlier
+-- in-code canonicalSchools map that only knew FloWrestling's spellings.
+CREATE TABLE school_aliases (
+  id         INTEGER PRIMARY KEY,
+  school_id  INTEGER NOT NULL REFERENCES schools(id),
+  source_id  INTEGER NOT NULL REFERENCES sources(id),
+  raw_name   TEXT NOT NULL,
+  UNIQUE (source_id, raw_name)
+);
+
+-- A wrestler's roster listing for one school/season — not a ranked, dated
+-- edition, so it doesn't fit snapshots/ranking_entries. Feeds the Fan Poll
+-- ballot builder's wrestler pool.
+CREATE TABLE roster_entries (
+  id                INTEGER PRIMARY KEY,
+  school_id         INTEGER NOT NULL REFERENCES schools(id),
+  wrestler_id       INTEGER REFERENCES wrestlers(id),   -- NULLABLE until resolved
+  season            INTEGER NOT NULL,                   -- ending year — the CURRENT roster season, generally AHEAD of snapshots.season; see §10
+  weight_class      INTEGER,                            -- nullable only for genuine edge cases; see §8
+  raw_name          TEXT NOT NULL,                       -- cleaned name used for matching
+  raw_source_string TEXT NOT NULL,                       -- full published row text, verbatim
+  captured_at       TEXT NOT NULL,
+  UNIQUE (school_id, season, raw_name)
+);
+
+CREATE INDEX idx_roster_wrestler ON roster_entries(wrestler_id);
+CREATE INDEX idx_roster_school   ON roster_entries(school_id, season);
+
+-- Fan Poll user accounts. Auth (session cookies, password hashing) is
+-- handled by nuxt-auth-utils in web/ — this table only stores what's needed
+-- to verify a login. Web is this table's only writer (pipeline never touches
+-- it), unlike every table above, which pipeline owns and web reads read-only.
+CREATE TABLE users (
+  id            INTEGER PRIMARY KEY,
+  email         TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  display_name  TEXT,
+  session_epoch INTEGER NOT NULL DEFAULT 1,  -- bump to invalidate every issued session at once
+  created_at    TEXT NOT NULL
+);
+
+-- A user's rolling, never-locked top-33 at one weight class. No snapshot_id —
+-- not a dated edition; the weekly aggregation job (Phase 4) takes the
+-- point-in-time snapshot, so the ballot itself carries no draft/submitted/
+-- locked state.
+CREATE TABLE ballots (
+  id           INTEGER PRIMARY KEY,
+  user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  weight_class INTEGER NOT NULL CHECK (weight_class IN (125,133,141,149,157,165,174,184,197,285)),
+  season       INTEGER NOT NULL,          -- the current ROSTER season (§10), not the rankings display season
+  updated_at   TEXT NOT NULL,
+  UNIQUE (user_id, weight_class, season)
+);
+
+-- One ranked slot on a ballot. wrestler_id is a real FOREIGN KEY (everything
+-- lives in one Postgres database — see "Postgres migration" below), unlike
+-- the cross-file reference an earlier split-database design for this feature
+-- would have needed.
+CREATE TABLE ballot_entries (
+  id          INTEGER PRIMARY KEY,
+  ballot_id   INTEGER NOT NULL REFERENCES ballots(id) ON DELETE CASCADE,
+  rank        INTEGER NOT NULL CHECK (rank BETWEEN 1 AND 33),
+  wrestler_id INTEGER NOT NULL REFERENCES wrestlers(id),
+  UNIQUE (ballot_id, rank),
+  UNIQUE (ballot_id, wrestler_id)
+);
+
+CREATE INDEX idx_ballot_entries_wrestler ON ballot_entries(wrestler_id);
 ```
  
 ## Design decisions (and why)
@@ -129,12 +201,63 @@ CREATE INDEX idx_aliases_lookup   ON wrestler_aliases(source_id, raw_name);
    inserted twice. Consumers must treat rank as non-unique (order by
    `rank, raw_source_string`); movement (§5) is unaffected, as it partitions by
    wrestler and orders by `published_date`, not by rank.
-## Postgres deltas
- 
-If you choose Postgres instead of SQLite:
-- `INTEGER PRIMARY KEY` → `INTEGER GENERATED ALWAYS AS IDENTITY` (or `BIGSERIAL`).
-- `TIMESTAMP` → `TIMESTAMPTZ`.
-- `DATE` is the same.
-- Everything else is identical. The model is simple enough to port either
-  direction in an afternoon, so SQLite-now does not lock you in.
+8. **Rosters are not rankings; `roster_entries` is a deliberately different
+   shape than `ranking_entries`.** No `rank` column (a roster isn't ordered),
+   no `snapshot_id` (not a dated edition — `season` is the only time
+   dimension, since a roster is "current state," re-scraped and upserted, not
+   accumulated week over week). `weight_class` is nullable, but not as a
+   hedge against unreliable data: WrestleStat publishes a real, actively
+   maintained weight per roster wrestler (docs/sources/wrestlestat.md);
+   nullable only covers genuine edge cases (e.g. an unassigned walk-on). A
+   wrestler can and does appear at a different weight in `roster_entries`
+   (their team's current depth-chart assignment) than a ballot ranks them at
+   (§4 of the Fan Poll implementation plan) — these are intentionally
+   independent; the ballot's own weight governs where a ranking counts.
+   `school_aliases` exists for the same reason `wrestler_aliases` does: a
+   second source (WrestleStat) brings its own school-name spellings, now
+   canonicalized as data instead of growing `resolve/schools.go`'s in-code
+   map indefinitely.
+9. **`session_epoch` is a deliberate substitute for a `sessions` table.**
+   nuxt-auth-utils' session is a sealed, encrypted cookie with no server-side
+   row to delete on logout/revocation — the only server-side lever is
+   comparing the cookie's stamped epoch against the current column value on
+   each request, so bumping it invalidates every outstanding session in one
+   write. (No code bumps it yet — nothing forces re-auth today — but the
+   column exists so a future feature that needs to can, without a migration.)
+10. **`roster_entries.season` and `snapshots.season` are the same *kind* of
+    value (ending year) but are NOT expected to be the same *number* at any
+    given time, and that's normal, not a bug.** `snapshots.season` tracks
+    whatever rankings have been published (currently 2026 — last season,
+    ingested as launch backfill per `docs/decisions.md`; out-of-season means
+    no live 2026-27 rankings yet). `roster_entries.season` tracks the
+    *current* roster — as of this being written, 2027 (the upcoming 2026-27
+    season, already underway roster-wise before it starts competing).
+    `ballots.season` follows the roster season, not the rankings season: a
+    ballot ranks wrestlers who are *currently on a roster*, which is a
+    forward-looking pool independent of which rankings happen to be on
+    display. Query the right one per table — never assume they match.
+11. **A ballot is validated against `roster_entries`, not just against
+    `wrestlers` existing.** `ballot_entries.wrestler_id` is a real FK to
+    `wrestlers(id)`, which only guarantees the id is *some* canonical
+    wrestler — including one who only ever appeared in an old, resolved
+    ranking entry with no current roster listing. The write path
+    (`server/api/ballots/[weight].patch.ts`) additionally checks every
+    submitted id against the current season's `roster_entries` before
+    accepting it, so a ballot can't reference someone who isn't part of the
+    pool the picker actually shows.
+## Postgres migration (2026-07-27)
+
+The store is Postgres, not SQLite — migrated once the Fan Poll feature's open
+public signup + concurrent user writes, and a move off the Pi to a hosted
+PaaS, made SQLite's single-writer/single-machine model the wrong fit (see
+`docs/decisions.md` Stack). The port from the original SQLite schema was
+exactly the delta this section used to predict:
+- `INTEGER PRIMARY KEY` → `INTEGER GENERATED ALWAYS AS IDENTITY`.
+- Foreign keys enforced by default (no `PRAGMA foreign_keys` needed).
+- Dates/timestamps **stayed** `TEXT` in ISO-8601, deliberately not switched to
+  `DATE`/`TIMESTAMPTZ` — that would have rippled into every Go/TS call site's
+  scanning code for no behavioral benefit at this scale.
+- Everything else — including the LAG() movement query — is identical.
+  `db/migrations/0001_init.sql` is the live DDL; this file remains its
+  human-readable mirror.
  

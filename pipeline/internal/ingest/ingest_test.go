@@ -8,33 +8,15 @@ import (
 	"testing"
 	"time"
 
-	_ "modernc.org/sqlite"
-
 	"pipeline/internal/scraper"
-	"pipeline/internal/store"
+	"pipeline/internal/storetest"
 )
 
-var (
-	migrationsDir = filepath.Join("..", "..", "..", "db", "migrations")
-	seedDir       = filepath.Join("..", "..", "..", "db", "seed")
-	fixtureFile   = filepath.Join("..", "scraper", "testdata", "ranking_container_14300895.json")
-)
+var fixtureFile = filepath.Join("..", "scraper", "testdata", "ranking_container_14300895.json")
 
 func newDB(t *testing.T) *sql.DB {
 	t.Helper()
-	ctx := context.Background()
-	db, err := store.Open(filepath.Join(t.TempDir(), "test.db"))
-	if err != nil {
-		t.Fatalf("open: %v", err)
-	}
-	t.Cleanup(func() { db.Close() })
-	if err := store.ApplyMigrations(ctx, db, migrationsDir); err != nil {
-		t.Fatalf("migrations: %v", err)
-	}
-	if err := store.ApplySeeds(ctx, db, seedDir); err != nil {
-		t.Fatalf("seeds: %v", err)
-	}
-	return db
+	return storetest.NewDB(t)
 }
 
 func loadFixture(t *testing.T) scraper.Container {

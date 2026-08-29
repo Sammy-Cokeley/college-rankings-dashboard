@@ -41,7 +41,7 @@ func ApplyMigrations(ctx context.Context, db *sql.DB, dir string) error {
 
 		if err := applyFileTx(ctx, db, path, func(tx *sql.Tx) error {
 			_, err := tx.ExecContext(ctx,
-				`INSERT INTO schema_migrations (filename, applied_at) VALUES (?, ?)`,
+				`INSERT INTO schema_migrations (filename, applied_at) VALUES ($1, $2)`,
 				name, time.Now().UTC().Format(time.RFC3339))
 			return err
 		}); err != nil {
@@ -52,8 +52,8 @@ func ApplyMigrations(ctx context.Context, db *sql.DB, dir string) error {
 }
 
 // ApplySeeds runs every *.sql file in dir unconditionally, in filename order.
-// Seed files are expected to be idempotent (e.g. INSERT OR IGNORE) since they
-// run on every invocation and are not tracked.
+// Seed files are expected to be idempotent (e.g. ON CONFLICT DO NOTHING) since
+// they run on every invocation and are not tracked.
 func ApplySeeds(ctx context.Context, db *sql.DB, dir string) error {
 	files, err := sqlFiles(dir)
 	if err != nil {
@@ -70,7 +70,7 @@ func ApplySeeds(ctx context.Context, db *sql.DB, dir string) error {
 func migrationApplied(ctx context.Context, db *sql.DB, name string) (bool, error) {
 	var one int
 	err := db.QueryRowContext(ctx,
-		`SELECT 1 FROM schema_migrations WHERE filename = ?`, name).Scan(&one)
+		`SELECT 1 FROM schema_migrations WHERE filename = $1`, name).Scan(&one)
 	switch {
 	case err == nil:
 		return true, nil

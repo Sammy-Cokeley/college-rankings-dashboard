@@ -1,5 +1,5 @@
-// Command seed applies the db/seed/*.sql files to a SQLite database. Seed files
-// are idempotent, so this is safe to run repeatedly.
+// Command seed applies the db/seed/*.sql files to a Postgres database. Seed
+// files are idempotent, so this is safe to run repeatedly.
 package main
 
 import (
@@ -7,17 +7,17 @@ import (
 	"flag"
 	"log"
 
-	_ "modernc.org/sqlite"
+	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"pipeline/internal/store"
 )
 
 func main() {
-	dbPath := flag.String("db", "rankings.db", "path to the SQLite database file")
+	dbURL := flag.String("db", "", "Postgres connection string (default: $DATABASE_URL)")
 	dir := flag.String("dir", "../db/seed", "directory of *.sql seed files")
 	flag.Parse()
 
-	db, err := store.Open(*dbPath)
+	db, err := store.OpenForMigrations(store.ResolveDBURL(*dbURL))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -26,5 +26,5 @@ func main() {
 	if err := store.ApplySeeds(context.Background(), db, *dir); err != nil {
 		log.Fatalf("seed: %v", err)
 	}
-	log.Printf("seeds applied from %s to %s", *dir, *dbPath)
+	log.Printf("seeds applied from %s", *dir)
 }

@@ -8,15 +8,19 @@
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
     "test": "vitest run",
-    "db:build": "cd ../pipeline && go run ./cmd/migrate -db rankings.db -dir ../db/migrations && go run ./cmd/seed -db rankings.db -dir ../db/seed && go run ./cmd/scrape -db rankings.db -fixture internal/scraper/testdata/ranking_container_14300895_10weights.json && go run ./cmd/resolve -db rankings.db"
+    "db:build": "cd ../pipeline && go run ./cmd/migrate -dir ../db/migrations && go run ./cmd/seed -dir ../db/seed && go run ./cmd/scrape -fixture internal/scraper/testdata/ranking_container_14300895_10weights.json && go run ./cmd/resolve"
   },
   "dependencies": {
-    "better-sqlite3": "^12.11.1",
     "nuxt": "^3.21.8",
-    "vue": "^3.5.39"
+    "nuxt-auth-utils": "^0.5.29",
+    "postgres": "^3.4.9",
+    "vue": "^3.5.39",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.13",
+    "@nuxt/test-utils": "^4.0.3",
+    "@vue/test-utils": "^2.4.11",
+    "happy-dom": "^20.10.6",
     "vitest": "^4.1.9"
   }
 }

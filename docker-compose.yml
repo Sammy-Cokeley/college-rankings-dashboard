@@ -1,0 +1,23 @@
+# Local Postgres for dev/test. Mirrors the hosted PaaS Postgres the platform
+# runs on in production (docs/decisions.md: platform moved off the Pi/SQLite
+# once open public signup + concurrent user writes were on the table).
+#
+# Host port is 5433, not Postgres's default 5432 — deliberately, to avoid
+# colliding with any other local Postgres install on the dev machine.
+#
+# Start: docker compose up -d
+# Then:  cp .env.example .env   (adjust if you changed the credentials below)
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: rankings
+      POSTGRES_PASSWORD: rankings
+      POSTGRES_DB: rankings
+    ports:
+      - '5433:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

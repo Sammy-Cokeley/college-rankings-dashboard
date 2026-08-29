@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { SeasonSeries, WeightRankings } from '~/types/rankings'
 import { isWeightClass } from '~/utils/weights'
+import { SOURCES, DEFAULT_SOURCE } from '~/utils/sources'
 
 definePageMeta({
   validate: (route) => isWeightClass(Number(route.params.weight)),
@@ -12,31 +13,55 @@ const router = useRouter()
 // weight pages, so a plain const would freeze the first weight visited.
 const weight = computed(() => Number(route.params.weight))
 
+const sourceSlug = computed(() => {
+  const raw = route.query.source
+  const slug = typeof raw === 'string' ? raw : DEFAULT_SOURCE.slug
+  return SOURCES.some((s) => s.slug === slug) ? slug : DEFAULT_SOURCE.slug
+})
+
 const url = computed(() => {
+  const params = new URLSearchParams({ source: sourceSlug.value })
   const date = route.query.date
-  const query = typeof date === 'string' ? `?date=${encodeURIComponent(date)}` : ''
-  return `/api/rankings/${weight.value}${query}`
+  if (typeof date === 'string') params.set('date', date)
+  return `/api/rankings/${weight.value}?${params}`
 })
 
 const { data, error } = await useFetch<WeightRankings>(url)
 
-if (error.value) {
+// A source with no data yet (e.g. Fan Poll before enough ballots exist) is a
+// normal, expected state — show it in-page with a way back to another
+// source, not a hard error page.
+const notYetPublished = computed(() => error.value?.statusCode === 503)
+
+if (error.value && !notYetPublished.value) {
   throw createError({
     statusCode: error.value.statusCode ?? 500,
     statusMessage: error.value.statusMessage ?? 'Failed to load rankings',
   })
 }
 
+const currentSourceName = computed(
+  () => SOURCES.find((s) => s.slug === sourceSlug.value)?.name ?? sourceSlug.value,
+)
+
 // The bump chart is season-wide, independent of the selected edition. Its
-// failure is non-fatal: the rankings table still renders without it.
-const seriesUrl = computed(() => `/api/rankings/${weight.value}/series`)
+// failure is non-fatal: the rankings table still renders without it (or,
+// when there's no edition at all, simply doesn't render — the template
+// already guards on `seriesData.series.length`).
+const seriesUrl = computed(() => `/api/rankings/${weight.value}/series?source=${sourceSlug.value}`)
 const { data: seriesData } = await useFetch<SeasonSeries>(seriesUrl)
 
-const edition = computed(() => data.value!.edition)
-const dates = computed(() => data.value!.dates)
+// Nullable now that a source can have no data yet (notYetPublished) — every
+// consumer below must guard, not assume an edition exists.
+const edition = computed(() => data.value?.edition ?? null)
+const dates = computed(() => data.value?.dates ?? [])
 
-const prevDate = computed(() => dates.value[edition.value.week - 2]?.date ?? null)
-const nextDate = computed(() => dates.value[edition.value.week]?.date ?? null)
+const prevDate = computed(() =>
+  edition.value ? (dates.value[edition.value.week - 2]?.date ?? null) : null,
+)
+const nextDate = computed(() =>
+  edition.value ? (dates.value[edition.value.week]?.date ?? null) : null,
+)
 
 // --- selection (shareable via ?sel=) ---------------------------------------
 
@@ -65,7 +90,7 @@ function toggleWrestler(wrestlerId: number | null) {
 // Toggles the whole school group (current edition's rows): if every wrestler
 // from the school is already selected, deselect them; otherwise add the rest.
 function toggleSchool(school: string | null) {
-  if (!school) return
+  if (!school || !edition.value) return
   const ids = edition.value.entries
     .filter((r) => r.school === school && r.wrestlerId !== null)
     .map((r) => r.wrestlerId!)
@@ -89,9 +114,12 @@ const FOLD_RANK = 10
 
 // Cut by rank, not row count, so a tie at the fold never gets half-hidden.
 // Hidden rows stay in the DOM (CSS display:none) — SSR HTML keeps all names.
-const foldedCount = computed(() => edition.value.entries.filter((r) => r.rank > FOLD_RANK).length)
+const foldedCount = computed(
+  () => edition.value?.entries.filter((r) => r.rank > FOLD_RANK).length ?? 0,
+)
 
 function selectionBelowFold(): boolean {
+  if (!edition.value) return false
   const sel = new Set(selected.value)
   return edition.value.entries.some((r) => r.wrestlerId !== null && sel.has(r.wrestlerId) && r.rank > FOLD_RANK)
 }
@@ -112,7 +140,7 @@ watch(selected, () => {
 // reset would evaluate the fold against the OUTGOING weight's entries. If
 // the series payload (and thus a still-valid ?sel=) lands after this reset,
 // the selected watcher above re-expands — the two converge on fresh data.
-watch(() => edition.value.weight, () => {
+watch(() => edition.value?.weight, () => {
   expanded.value = selectionBelowFold()
 })
 
@@ -121,20 +149,35 @@ watch(() => edition.value.weight, () => {
 function toEdition(date: string | null) {
   if (!date) return
   const query: Record<string, string> = {}
+  if (sourceSlug.value !== DEFAULT_SOURCE.slug) query.source = sourceSlug.value
   if (selected.value.length) query.sel = selected.value.join(',')
   if (date !== dates.value[dates.value.length - 1]?.date) query.date = date
   navigateTo({ query })
 }
 
-const seasonLabel = computed(() => `${edition.value.season - 1}-${String(edition.value.season).slice(2)}`)
+// Switching source drops date/sel — both are meaningful only within the
+// source they came from (a date valid for one source's editions is unlikely
+// to exist for another's; §10 of schema.md: sources don't even share a
+// season number in lockstep).
+function switchSource(slug: string) {
+  const query: Record<string, string> = {}
+  if (slug !== DEFAULT_SOURCE.slug) query.source = slug
+  navigateTo({ query })
+}
 
-const pageTitle = computed(
-  () =>
-    `${weight.value} lbs — NCAA DI Wrestling Rankings (Week ${edition.value.week}, ${edition.value.date})`,
+const seasonLabel = computed(() =>
+  edition.value ? `${edition.value.season - 1}-${String(edition.value.season).slice(2)}` : '',
 )
-const pageDescription = computed(
-  () =>
-    `${data.value!.source} NCAA DI wrestling rankings at ${weight.value} lbs, week ${edition.value.week} of the ${seasonLabel.value} season, with week-over-week movement and season trajectories.`,
+
+const pageTitle = computed(() =>
+  edition.value
+    ? `${weight.value} lbs — NCAA DI Wrestling Rankings (Week ${edition.value.week}, ${edition.value.date})`
+    : `${weight.value} lbs — NCAA DI Wrestling Rankings`,
+)
+const pageDescription = computed(() =>
+  edition.value
+    ? `${data.value!.source} NCAA DI wrestling rankings at ${weight.value} lbs, week ${edition.value.week} of the ${seasonLabel.value} season, with week-over-week movement and season trajectories.`
+    : `NCAA DI wrestling rankings at ${weight.value} lbs.`,
 )
 
 useSeoMeta({
@@ -155,6 +198,19 @@ useSeoMeta({
         <p class="sub">
           WK {{ edition.week }} / {{ edition.date }} / {{ data.source }} / {{ seasonLabel }}
         </p>
+        <nav class="source-tabs" aria-label="Ranking source">
+          <button
+            v-for="s in SOURCES"
+            :key="s.slug"
+            type="button"
+            :class="{ active: s.slug === sourceSlug }"
+            :aria-current="s.slug === sourceSlug ? 'true' : undefined"
+            @click="switchSource(s.slug)"
+          >
+            {{ s.name }}
+          </button>
+        </nav>
+        <NuxtLink :to="`/ballot/${weight}`" class="ballot-cta">Build your {{ weight }} ballot →</NuxtLink>
       </div>
       <nav class="controls" aria-label="Editions">
         <button :disabled="!prevDate" aria-label="Previous week" @click="toEdition(prevDate)">←</button>
@@ -226,5 +282,33 @@ useSeoMeta({
         @toggle="toggleWrestler"
       />
     </section>
+  </div>
+  <div v-else-if="notYetPublished">
+    <div class="pagehead">
+      <div>
+        <h1>{{ weight }}<small>LBS</small></h1>
+        <p class="sub">{{ currentSourceName }} / NOT YET PUBLISHED</p>
+        <nav class="source-tabs" aria-label="Ranking source">
+          <button
+            v-for="s in SOURCES"
+            :key="s.slug"
+            type="button"
+            :class="{ active: s.slug === sourceSlug }"
+            :aria-current="s.slug === sourceSlug ? 'true' : undefined"
+            @click="switchSource(s.slug)"
+          >
+            {{ s.name }}
+          </button>
+        </nav>
+        <NuxtLink :to="`/ballot/${weight}`" class="ballot-cta">Build your {{ weight }} ballot →</NuxtLink>
+      </div>
+    </div>
+    <p class="source-empty">
+      {{
+        sourceSlug === 'fan-poll'
+          ? `The Fan Poll hasn't published a ${weight} lbs ranking yet — not enough ballots have been submitted at this weight. Try another source above, or check back once more ballots come in.`
+          : `${currentSourceName} hasn't published a ${weight} lbs ranking yet. Try another source above.`
+      }}
+    </p>
   </div>
 </template>

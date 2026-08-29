@@ -4,11 +4,18 @@
 *.out
 /pipeline/pipeline
 
+# Node deps (web/ has its own .gitignore too, but this covers any stray
+# root-level node_modules, e.g. from running npm here by mistake)
+node_modules/
+
 # SQLite databases (built locally; never committed)
 *.db
 *.db-wal
 *.db-shm
 *.db-journal
+
+# Local env (DB connection strings)
+.env
 
 # Local Claude Code config (machine-specific) + tool artifacts
 .claude/settings.local.json

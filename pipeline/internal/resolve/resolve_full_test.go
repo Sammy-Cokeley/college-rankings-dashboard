@@ -34,7 +34,7 @@ func ingestFullFixture(t *testing.T, db *sql.DB) {
 func distinctWrestlers(t *testing.T, db *sql.DB, name string) int {
 	t.Helper()
 	return count(t, db,
-		`SELECT COUNT(DISTINCT wrestler_id) FROM ranking_entries WHERE raw_source_string = ?`, name)
+		`SELECT COUNT(DISTINCT wrestler_id) FROM ranking_entries WHERE raw_source_string = $1`, name)
 }
 
 // School canonicalization must merge the one false split (Mougalian, published

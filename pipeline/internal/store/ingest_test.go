@@ -3,28 +3,8 @@ package store
 import (
 	"context"
 	"database/sql"
-	"path/filepath"
 	"testing"
-
-	_ "modernc.org/sqlite"
 )
-
-func freshDB(t *testing.T) *sql.DB {
-	t.Helper()
-	ctx := context.Background()
-	db, err := Open(filepath.Join(t.TempDir(), "test.db"))
-	if err != nil {
-		t.Fatalf("open: %v", err)
-	}
-	t.Cleanup(func() { db.Close() })
-	if err := ApplyMigrations(ctx, db, migrationsDir); err != nil {
-		t.Fatalf("migrations: %v", err)
-	}
-	if err := ApplySeeds(ctx, db, seedDir); err != nil {
-		t.Fatalf("seeds: %v", err)
-	}
-	return db
-}
 
 func TestIngestEdition_CreatesThenSkips(t *testing.T) {
 	ctx := context.Background()
@@ -186,9 +166,9 @@ func TestRankingEntries_RejectExactDuplicateRow(t *testing.T) {
 }
 
 // Two entries tied at one rank must come back in a stable order (rank, then
-// raw_source_string), not SQLite's arbitrary order for equal ranks — so SSR
-// output and tests are deterministic (schema.md §7). Insert B before A to prove
-// the query sorts rather than echoing insertion order.
+// raw_source_string), not the database's arbitrary order for equal ranks — so
+// SSR output and tests are deterministic (schema.md §7). Insert B before A to
+// prove the query sorts rather than echoing insertion order.
 func TestListEntries_TieRankStableOrder(t *testing.T) {
 	ctx := context.Background()
 	db := freshDB(t)

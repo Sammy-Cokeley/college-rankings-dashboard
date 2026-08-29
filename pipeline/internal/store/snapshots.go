@@ -7,7 +7,7 @@ import (
 )
 
 // Snapshot is one published ranking list: a source, a weight class, a date.
-// Dates are ISO-8601 TEXT, matching the SQLite schema (see db/migrations).
+// Dates are ISO-8601 TEXT, matching the schema (see db/migrations).
 type Snapshot struct {
 	ID            int64
 	SourceID      int64
@@ -45,29 +45,32 @@ type Movement struct {
 	RawSourceString string
 }
 
-// InsertSnapshot inserts a snapshot row and returns its new id.
+// InsertSnapshot inserts a snapshot row and returns its new id. Postgres has
+// no LastInsertId equivalent, so the id comes back via RETURNING.
 func InsertSnapshot(ctx context.Context, db *sql.DB, s Snapshot) (int64, error) {
-	res, err := db.ExecContext(ctx,
+	var id int64
+	err := db.QueryRowContext(ctx,
 		`INSERT INTO snapshots (source_id, weight_class, season, published_date, captured_at)
-		 VALUES (?, ?, ?, ?, ?)`,
-		s.SourceID, s.WeightClass, s.Season, s.PublishedDate, s.CapturedAt)
+		 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+		s.SourceID, s.WeightClass, s.Season, s.PublishedDate, s.CapturedAt).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("insert snapshot: %w", err)
 	}
-	return res.LastInsertId()
+	return id, nil
 }
 
 // InsertRankingEntry inserts an entry row and returns its new id. A nil
 // WrestlerID is stored as NULL (unresolved).
 func InsertRankingEntry(ctx context.Context, db *sql.DB, e RankingEntry) (int64, error) {
-	res, err := db.ExecContext(ctx,
+	var id int64
+	err := db.QueryRowContext(ctx,
 		`INSERT INTO ranking_entries (snapshot_id, wrestler_id, rank, raw_source_string, raw_school, raw_grade)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
-		e.SnapshotID, e.WrestlerID, e.Rank, e.RawSourceString, e.RawSchool, e.RawGrade)
+		 VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+		e.SnapshotID, e.WrestlerID, e.Rank, e.RawSourceString, e.RawSchool, e.RawGrade).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("insert ranking entry: %w", err)
 	}
-	return res.LastInsertId()
+	return id, nil
 }
 
 // GetSnapshot reads a single snapshot by id.
@@ -75,7 +78,7 @@ func GetSnapshot(ctx context.Context, db *sql.DB, id int64) (Snapshot, error) {
 	var s Snapshot
 	err := db.QueryRowContext(ctx,
 		`SELECT id, source_id, weight_class, season, published_date, captured_at
-		 FROM snapshots WHERE id = ?`, id).
+		 FROM snapshots WHERE id = $1`, id).
 		Scan(&s.ID, &s.SourceID, &s.WeightClass, &s.Season, &s.PublishedDate, &s.CapturedAt)
 	if err != nil {
 		return Snapshot{}, fmt.Errorf("get snapshot %d: %w", id, err)
@@ -85,12 +88,12 @@ func GetSnapshot(ctx context.Context, db *sql.DB, id int64) (Snapshot, error) {
 
 // ListEntries reads all entries for a snapshot, ordered by rank then
 // raw_source_string — the latter keeps a tie (two entries sharing a rank; see
-// schema.md §7) in a stable, deterministic order rather than SQLite's arbitrary
-// order for equal keys.
+// schema.md §7) in a stable, deterministic order rather than relying on the
+// database's arbitrary order for equal keys.
 func ListEntries(ctx context.Context, db *sql.DB, snapshotID int64) ([]RankingEntry, error) {
 	rows, err := db.QueryContext(ctx,
 		`SELECT id, snapshot_id, wrestler_id, rank, raw_source_string, raw_school, raw_grade
-		 FROM ranking_entries WHERE snapshot_id = ? ORDER BY rank, raw_source_string`, snapshotID)
+		 FROM ranking_entries WHERE snapshot_id = $1 ORDER BY rank, raw_source_string`, snapshotID)
 	if err != nil {
 		return nil, fmt.Errorf("list entries for snapshot %d: %w", snapshotID, err)
 	}
@@ -121,7 +124,7 @@ SELECT e.snapshot_id, s.published_date, e.wrestler_id, e.rank,
        e.raw_source_string
 FROM ranking_entries e
 JOIN snapshots s ON s.id = e.snapshot_id
-WHERE s.source_id = ? AND s.weight_class = ? AND s.season = ?
+WHERE s.source_id = $1 AND s.weight_class = $2 AND s.season = $3
 ORDER BY s.published_date, e.rank, e.raw_source_string`,
 		sourceID, weightClass, season)
 	if err != nil {

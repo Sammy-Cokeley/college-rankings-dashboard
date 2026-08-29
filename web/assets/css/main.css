@@ -199,6 +199,30 @@ a {
   color: var(--ink);
 }
 
+.auth-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.auth-link {
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--muted);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 0.35rem;
+  padding: 0.3rem 0.6rem;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.auth-link:hover {
+  color: var(--ink);
+}
+
 .site-main {
   padding-bottom: 1rem;
 }
@@ -241,6 +265,47 @@ a {
   margin: 0.3rem 0 0;
   font-size: 0.88rem;
   font-family: var(--font-mono);
+}
+
+.source-tabs {
+  display: flex;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+}
+
+.source-tabs button {
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 0.35rem;
+  padding: 0.25rem 0.6rem;
+  cursor: pointer;
+}
+
+.source-tabs button:hover {
+  color: var(--ink);
+}
+
+.source-tabs button.active {
+  color: var(--accent-ink);
+  background: var(--chip);
+  border-color: transparent;
+}
+
+.ballot-cta {
+  display: inline-block;
+  margin-top: 0.6rem;
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.ballot-cta:hover {
+  text-decoration: underline;
 }
 
 .controls {
@@ -451,5 +516,29 @@ a {
 }
 
 .fold-toggle button:hover {
+  color: var(--ink);
+}
+
+/* --- Empty-source state (e.g. Fan Poll before enough ballots) -------- */
+
+.source-empty {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  color: var(--muted);
+}
+
+/* --- Back navigation (page-level, below the pagehead) ----------------- */
+
+.back-link {
+  display: inline-block;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-decoration: none;
+  margin: 0.75rem 0 0.25rem;
+}
+
+.back-link:hover {
   color: var(--ink);
 }

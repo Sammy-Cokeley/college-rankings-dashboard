@@ -1,8 +1,15 @@
-import { defineConfig } from 'vitest/config'
+import { defineVitestConfig } from '@nuxt/test-utils/config'
 
-export default defineConfig({
+// Default environment stays node (utils/queries tests). Component tests opt
+// into the Nuxt environment per file via the *.nuxt.test.ts suffix.
+export default defineVitestConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.ts'],
+    environmentOptions: {
+      nuxt: {
+        domEnvironment: 'happy-dom',
+      },
+    },
   },
 })

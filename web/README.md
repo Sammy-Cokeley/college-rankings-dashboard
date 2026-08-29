@@ -1,16 +1,18 @@
 # web/ — Nuxt 3 front end
 
-Fan-facing SSR app for the rankings board. Reads the pipeline-built SQLite DB
-directly via Nitro server routes (no separate API layer in v0) and **never
-writes** — the pipeline is the single weekly writer; WAL mode keeps reads and
-the writer out of each other's way.
+Fan-facing SSR app for the rankings board. Reads the pipeline-built Postgres DB
+directly via Nitro server routes (no separate API layer in v0). Still only
+issues SELECTs today (no write routes exist yet) — see `server/utils/db.ts`
+for how that invariant is meant to be enforced once a write path (e.g.
+community ballots) exists.
 
 ## Setup
 
-Requires Node 24 LTS (better-sqlite3 ships prebuilt binaries for win32-x64 and
-linux-arm64, so no build toolchain is needed on the dev box or the Pi).
+Requires Node 24 LTS and a local Postgres (`docker compose up -d` from the
+repo root — see the root `docker-compose.yml` / `.env.example`).
 
 ```
+cp ../.env.example ../.env   # adjust if you changed docker-compose.yml's credentials
 npm install
 ```
 
@@ -18,7 +20,7 @@ npm install
 
 The app assumes a pre-built DB and fails loudly without one. Out of season the
 DB is built from the committed 10-weight fixture (last season's full container —
-the launch backfill corpus). Requires Go:
+the launch backfill corpus). Requires Go and `$DATABASE_URL` set:
 
 ```
 npm run db:build
@@ -27,11 +29,13 @@ npm run db:build
 or by hand, from `pipeline/`:
 
 ```
-go run ./cmd/migrate -db rankings.db -dir ../db/migrations
-go run ./cmd/seed    -db rankings.db -dir ../db/seed
-go run ./cmd/scrape  -db rankings.db -fixture internal/scraper/testdata/ranking_container_14300895_10weights.json
-go run ./cmd/resolve -db rankings.db
+go run ./cmd/migrate -dir ../db/migrations
+go run ./cmd/seed    -dir ../db/seed
+go run ./cmd/scrape  -fixture internal/scraper/testdata/ranking_container_14300895_10weights.json
+go run ./cmd/resolve
 ```
+
+(all four default to `-db=$DATABASE_URL` when `-db` is omitted)
 
 Expected result: 220 snapshots, 7080 entries, 519 wrestlers, and one logged
 non-fatal tie anomaly (197, 2026-03-27 — see `docs/schema.md` §7).
@@ -40,14 +44,15 @@ non-fatal tie anomaly (197, 2026-03-27 — see `docs/schema.md` §7).
 
 | Env | Default | Meaning |
 | --- | --- | --- |
-| `NUXT_DB_PATH` | `../pipeline/rankings.db` | SQLite file, resolved against the server process cwd |
+| `DATABASE_URL` | *(required)* | Postgres connection string, shared with the Go pipeline — see `.env.example` |
 
 ## Commands
 
 ```
 npm run dev      # dev server on :3000
-npm test         # vitest — unit + query tests; the integration suite
-                 # against the full rankings.db is skipped if it isn't built
+npm test         # vitest — unit + query tests (needs $TEST_DATABASE_URL); the
+                 # integration suite against the full rankings DB is skipped
+                 # unless $DATABASE_URL points at a built one
 npm run build    # production build to .output/
 node .output/server/index.mjs   # run the production server
 ```

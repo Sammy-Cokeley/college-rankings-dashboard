@@ -32,22 +32,19 @@ func IngestEdition(ctx context.Context, db *sql.DB, snap Snapshot, entries []Ran
 		return id, false, nil
 	}
 
-	res, err := tx.ExecContext(ctx,
+	var snapshotID int64
+	err = tx.QueryRowContext(ctx,
 		`INSERT INTO snapshots (source_id, weight_class, season, published_date, captured_at)
-		 VALUES (?, ?, ?, ?, ?)`,
-		snap.SourceID, snap.WeightClass, snap.Season, snap.PublishedDate, snap.CapturedAt)
+		 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+		snap.SourceID, snap.WeightClass, snap.Season, snap.PublishedDate, snap.CapturedAt).Scan(&snapshotID)
 	if err != nil {
 		return 0, false, fmt.Errorf("insert snapshot: %w", err)
-	}
-	snapshotID, err := res.LastInsertId()
-	if err != nil {
-		return 0, false, err
 	}
 
 	for _, e := range entries {
 		if _, err := tx.ExecContext(ctx,
 			`INSERT INTO ranking_entries (snapshot_id, wrestler_id, rank, raw_source_string, raw_school, raw_grade)
-			 VALUES (?, ?, ?, ?, ?, ?)`,
+			 VALUES ($1, $2, $3, $4, $5, $6)`,
 			snapshotID, e.WrestlerID, e.Rank, e.RawSourceString, e.RawSchool, e.RawGrade); err != nil {
 			return 0, false, fmt.Errorf("insert entry (rank %d, %q): %w", e.Rank, e.RawSourceString, err)
 		}
@@ -63,7 +60,7 @@ func existingSnapshotID(ctx context.Context, tx *sql.Tx, snap Snapshot) (int64, 
 	var id int64
 	err := tx.QueryRowContext(ctx,
 		`SELECT id FROM snapshots
-		 WHERE source_id = ? AND weight_class = ? AND season = ? AND published_date = ?`,
+		 WHERE source_id = $1 AND weight_class = $2 AND season = $3 AND published_date = $4`,
 		snap.SourceID, snap.WeightClass, snap.Season, snap.PublishedDate).Scan(&id)
 	switch {
 	case err == nil:
@@ -79,7 +76,7 @@ func existingSnapshotID(ctx context.Context, tx *sql.Tx, snap Snapshot) (int64, 
 func SourceID(ctx context.Context, db *sql.DB, name string) (int64, error) {
 	var id int64
 	if err := db.QueryRowContext(ctx,
-		`SELECT id FROM sources WHERE name = ?`, name).Scan(&id); err != nil {
+		`SELECT id FROM sources WHERE name = $1`, name).Scan(&id); err != nil {
 		return 0, fmt.Errorf("source %q: %w", name, err)
 	}
 	return id, nil

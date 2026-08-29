@@ -39,7 +39,7 @@ func ListUnresolvedEntries(ctx context.Context, q DBTX, sourceID int64) ([]Unres
 SELECT e.id, e.raw_source_string, e.raw_school, e.raw_grade
 FROM ranking_entries e
 JOIN snapshots s ON s.id = e.snapshot_id
-WHERE s.source_id = ? AND e.wrestler_id IS NULL
+WHERE s.source_id = $1 AND e.wrestler_id IS NULL
 ORDER BY e.id`, sourceID)
 	if err != nil {
 		return nil, fmt.Errorf("list unresolved entries: %w", err)
@@ -61,10 +61,36 @@ ORDER BY e.id`, sourceID)
 // in-memory index so identities are reused across runs.
 func ListAliases(ctx context.Context, q DBTX, sourceID int64) ([]Alias, error) {
 	rows, err := q.QueryContext(ctx,
-		`SELECT wrestler_id, raw_name, raw_school FROM wrestler_aliases WHERE source_id = ?`,
+		`SELECT wrestler_id, raw_name, raw_school FROM wrestler_aliases WHERE source_id = $1`,
 		sourceID)
 	if err != nil {
 		return nil, fmt.Errorf("list aliases: %w", err)
+	}
+	defer rows.Close()
+
+	var out []Alias
+	for rows.Next() {
+		var a Alias
+		if err := rows.Scan(&a.WrestlerID, &a.RawName, &a.RawSchool); err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+// ListAllAliases returns every known alias across every source, used to seed
+// the matcher's index for cross-source resolution (resolve.Roster): a
+// WrestleStat roster entry has never been "published" under the WrestleStat
+// source before, so ListAliases(sourceID=WrestleStat) would come back empty
+// on every run — matching against the FULL identity pool (Flo's aliases
+// included) is what lets the same real person resolve to one wrestler across
+// sources.
+func ListAllAliases(ctx context.Context, q DBTX) ([]Alias, error) {
+	rows, err := q.QueryContext(ctx,
+		`SELECT wrestler_id, raw_name, raw_school FROM wrestler_aliases`)
+	if err != nil {
+		return nil, fmt.Errorf("list all aliases: %w", err)
 	}
 	defer rows.Close()
 
@@ -87,13 +113,14 @@ func InsertWrestler(ctx context.Context, q DBTX, fullName, eligibility string) (
 	if eligibility != "" {
 		elig = eligibility
 	}
-	res, err := q.ExecContext(ctx,
-		`INSERT INTO wrestlers (full_name, current_school_id, eligibility_year) VALUES (?, NULL, ?)`,
-		fullName, elig)
+	var id int64
+	err := q.QueryRowContext(ctx,
+		`INSERT INTO wrestlers (full_name, current_school_id, eligibility_year) VALUES ($1, NULL, $2) RETURNING id`,
+		fullName, elig).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("insert wrestler %q: %w", fullName, err)
 	}
-	return res.LastInsertId()
+	return id, nil
 }
 
 // InsertAlias records a source raw-string -> wrestler mapping. The table's
@@ -101,7 +128,7 @@ func InsertWrestler(ctx context.Context, q DBTX, fullName, eligibility string) (
 // callers add an alias only when one does not already exist.
 func InsertAlias(ctx context.Context, q DBTX, wrestlerID, sourceID int64, rawName string, rawSchool *string) error {
 	if _, err := q.ExecContext(ctx,
-		`INSERT INTO wrestler_aliases (wrestler_id, source_id, raw_name, raw_school) VALUES (?, ?, ?, ?)`,
+		`INSERT INTO wrestler_aliases (wrestler_id, source_id, raw_name, raw_school) VALUES ($1, $2, $3, $4)`,
 		wrestlerID, sourceID, rawName, rawSchool); err != nil {
 		return fmt.Errorf("insert alias %q/%v: %w", rawName, rawSchool, err)
 	}
@@ -111,7 +138,7 @@ func InsertAlias(ctx context.Context, q DBTX, wrestlerID, sourceID int64, rawNam
 // SetEntryWrestler resolves an entry by attaching its canonical wrestler.
 func SetEntryWrestler(ctx context.Context, q DBTX, entryID, wrestlerID int64) error {
 	if _, err := q.ExecContext(ctx,
-		`UPDATE ranking_entries SET wrestler_id = ? WHERE id = ?`, wrestlerID, entryID); err != nil {
+		`UPDATE ranking_entries SET wrestler_id = $1 WHERE id = $2`, wrestlerID, entryID); err != nil {
 		return fmt.Errorf("set entry %d wrestler: %w", entryID, err)
 	}
 	return nil

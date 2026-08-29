@@ -18,7 +18,7 @@ import (
 	"os"
 	"time"
 
-	_ "modernc.org/sqlite"
+	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"pipeline/internal/ingest"
 	"pipeline/internal/scraper"
@@ -28,7 +28,7 @@ import (
 const userAgent = "collegiate-wrestling-rankings-board/0.1 (+contact: sammy.cokeley@gmail.com)"
 
 func main() {
-	dbPath := flag.String("db", "rankings.db", "path to the SQLite database file")
+	dbURL := flag.String("db", "", "Postgres connection string (default: $DATABASE_URL)")
 	fixture := flag.String("fixture", "internal/scraper/testdata/ranking_container_14300895.json",
 		"decoded container JSON to ingest (default offline path)")
 	page := flag.String("page", "", "saved page HTML file to decode instead of the fixture")
@@ -36,12 +36,12 @@ func main() {
 	season := flag.Int("season", 0, "season ending year, e.g. 2026 (0 = infer from container title)")
 	flag.Parse()
 
-	if err := run(*dbPath, *fixture, *page, *url, *season); err != nil {
+	if err := run(store.ResolveDBURL(*dbURL), *fixture, *page, *url, *season); err != nil {
 		log.Fatalf("scrape: %v", err)
 	}
 }
 
-func run(dbPath, fixture, page, url string, season int) error {
+func run(dbURL, fixture, page, url string, season int) error {
 	ctx := context.Background()
 
 	container, err := loadContainer(ctx, fixture, page, url)
@@ -57,7 +57,7 @@ func run(dbPath, fixture, page, url string, season int) error {
 		season = inferred
 	}
 
-	db, err := store.Open(dbPath)
+	db, err := store.Open(dbURL)
 	if err != nil {
 		return err
 	}

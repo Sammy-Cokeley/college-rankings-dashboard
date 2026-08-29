@@ -8,36 +8,19 @@ import (
 	"testing"
 	"time"
 
-	_ "modernc.org/sqlite"
-
 	"pipeline/internal/ingest"
 	"pipeline/internal/scraper"
 	"pipeline/internal/store"
+	"pipeline/internal/storetest"
 )
 
-var (
-	migrationsDir = filepath.Join("..", "..", "..", "db", "migrations")
-	seedDir       = filepath.Join("..", "..", "..", "db", "seed")
-	fixtureFile   = filepath.Join("..", "scraper", "testdata", "ranking_container_14300895.json")
-)
+var fixtureFile = filepath.Join("..", "scraper", "testdata", "ranking_container_14300895.json")
 
 const sourceName = "FloWrestling"
 
 func newDB(t *testing.T) *sql.DB {
 	t.Helper()
-	ctx := context.Background()
-	db, err := store.Open(filepath.Join(t.TempDir(), "test.db"))
-	if err != nil {
-		t.Fatalf("open: %v", err)
-	}
-	t.Cleanup(func() { db.Close() })
-	if err := store.ApplyMigrations(ctx, db, migrationsDir); err != nil {
-		t.Fatalf("migrations: %v", err)
-	}
-	if err := store.ApplySeeds(ctx, db, seedDir); err != nil {
-		t.Fatalf("seeds: %v", err)
-	}
-	return db
+	return storetest.NewDB(t)
 }
 
 func ingestFixture(t *testing.T, db *sql.DB) {
@@ -74,7 +57,7 @@ func TestSource_ResolvesFixture(t *testing.T) {
 	// number of canonical wrestlers the pass should create (no over-merge, no
 	// under-merge).
 	distinctRaw := count(t, db,
-		`SELECT COUNT(*) FROM (SELECT DISTINCT raw_source_string, raw_school FROM ranking_entries)`)
+		`SELECT COUNT(*) FROM (SELECT DISTINCT raw_source_string, raw_school FROM ranking_entries) AS raw_identities`)
 
 	res, err := Source(ctx, db, sourceName)
 	if err != nil {
@@ -158,7 +141,7 @@ func TestSource_IdentityIsNameAndSchool(t *testing.T) {
 		}
 		var id int64
 		if err := db.QueryRow(
-			`SELECT id FROM snapshots WHERE published_date = ?`, date).Scan(&id); err != nil {
+			`SELECT id FROM snapshots WHERE published_date = $1`, date).Scan(&id); err != nil {
 			t.Fatal(err)
 		}
 		return id
