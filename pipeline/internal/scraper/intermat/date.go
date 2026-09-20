@@ -21,3 +21,20 @@ func ResolveDate(timestamp string) (string, error) {
 	}
 	return t.Format("2006-01-02"), nil
 }
+
+// SeasonFromDate derives the season ending-year from a published_date
+// (YYYY-MM-DD), matching this project's Aug-Jul academic-year convention
+// (same rule ingest.SeasonFromTitle applies for Flo, just from a real date
+// instead of a container title string): August or later belongs to the
+// season ending the FOLLOWING year (e.g. 2026-09-17 -> season 2027);
+// January-July belongs to the season ending that same year.
+func SeasonFromDate(date string) (int, error) {
+	t, err := time.Parse("2006-01-02", date)
+	if err != nil {
+		return 0, fmt.Errorf("parse date %q: %w", date, err)
+	}
+	if t.Month() >= time.August {
+		return t.Year() + 1, nil
+	}
+	return t.Year(), nil
+}
