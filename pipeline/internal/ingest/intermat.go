@@ -10,7 +10,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strings"
 	"time"
 
 	"pipeline/internal/scraper/intermat"
@@ -96,35 +95,23 @@ func intermatRowRanks(rows []intermat.Row) []int {
 }
 
 // toIntermatEntries maps parsed rows to unresolved ranking entries.
-// RawSourceString is the published name, with Conference/Record — columns
-// FloWrestling's schema has no home for — folded into it as a trailing
-// " — {Record}, {Conference}" suffix when present, rather than dropped: the
-// project's rule is that published data is never silently discarded, and
-// neither column warrants a schema migration on its own (docs/sources/
-// intermat.md; decided with the user rather than guessed).
+// RawSourceString is the published name, matching Flo's shape exactly.
+// Conference and Record — columns FloWrestling's schema never needed — get
+// their own columns (raw_conference/raw_record, db/migrations/0005) rather
+// than being folded into the name string; an earlier version of this
+// function folded them in as a display-breaking workaround before those
+// columns existed (docs/decisions.md).
 func toIntermatEntries(rows []intermat.Row) []store.RankingEntry {
 	out := make([]store.RankingEntry, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, store.RankingEntry{
 			Rank:            r.Rank,
-			RawSourceString: withRecordConference(r.Name, r.Record, r.Conference),
+			RawSourceString: r.Name,
 			RawSchool:       optional(r.School),
 			RawGrade:        optional(r.Grade),
+			RawConference:   optional(r.Conference),
+			RawRecord:       optional(r.Record),
 		})
 	}
 	return out
-}
-
-func withRecordConference(name, record, conference string) string {
-	var extras []string
-	if record != "" {
-		extras = append(extras, record)
-	}
-	if conference != "" {
-		extras = append(extras, conference)
-	}
-	if len(extras) == 0 {
-		return name
-	}
-	return name + " — " + strings.Join(extras, ", ")
 }
