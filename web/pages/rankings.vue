@@ -41,6 +41,7 @@ interface DashboardRow {
   school: string | null
   grade: string | null
   prevRank: number | null
+  prevWeight: { weight: number; rank: number } | null
   delta: number | null // signed; null = first appearance (sorts last)
 }
 
@@ -55,6 +56,7 @@ const allRows = computed<DashboardRow[]>(() =>
         school: e.school,
         grade: e.grade,
         prevRank: e.prevRank,
+        prevWeight: e.prevWeight,
         delta: m.kind === 'new' ? null : m.kind === 'down' ? -m.delta : m.delta,
       }
     }),
@@ -188,7 +190,7 @@ useSeoMeta({
             <td class="name">{{ row.name }}</td>
             <td class="school">{{ row.school }}</td>
             <td class="grade">{{ row.grade }}</td>
-            <td class="num"><MovementBadge :rank="row.rank" :prev-rank="row.prevRank" /></td>
+            <td class="num"><MovementBadge :rank="row.rank" :prev-rank="row.prevRank" :prev-weight="row.prevWeight" /></td>
           </tr>
         </tbody>
       </table>

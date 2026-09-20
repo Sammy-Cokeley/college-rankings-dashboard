@@ -38,7 +38,7 @@ beforeAll(async () => {
   SRC = (await getSourceId(db, 'FloWrestling'))!
 
   const wrestlerIds = new Map<string, number>()
-  for (const name of ['Arn', 'Boe', 'Cox', 'Dye', 'Eck', 'Fox']) {
+  for (const name of ['Arn', 'Boe', 'Cox', 'Dye', 'Eck', 'Fox', 'Gio']) {
     const rows = await db<{ id: number }[]>`
       INSERT INTO wrestlers (full_name) VALUES (${name}) RETURNING id`
     wrestlerIds.set(name, rows[0]!.id)
@@ -92,6 +92,10 @@ beforeAll(async () => {
       ['Cox', 5, 'Cox', 'Cornell', 'SO'],
       ['Fox', 6, 'Fox', 'Minnesota', 'SR'],
       ['Eck', 6, 'Eck', 'Michigan', 'JR'],
+      // Cross-weight annotation case: Gio ranked at 285 in d2 (below), then
+      // shows up "new" at 125 here in d4 — a genuine weight change, not a
+      // brand-new wrestler (decisions.md "Cross-weight annotation").
+      ['Gio', 4, 'Gio', 'Rutgers', 'SO'],
     ],
   }
 
@@ -103,9 +107,11 @@ beforeAll(async () => {
   }
 
   // A second weight class in the same season must not bleed into 125's dates
-  // or movement.
+  // or movement — and doubles as Gio's earlier-weight history for the
+  // cross-weight annotation case above.
   const otherSnap = await insertSnap(d2, 285)
   await insertEntry(otherSnap, null, 1, 'Big Fella', 'Oklahoma State', 'SR')
+  await insertEntry(otherSnap, 'Gio', 1, 'Gio', 'Rutgers', 'SO')
 })
 
 afterAll(async () => {
@@ -197,6 +203,35 @@ describe('editionEntries', () => {
     expect(cox).toMatchObject({ rank: 5, prevRank: 3 }) // last seen d2 at 3
   })
 
+  describe('cross-weight annotation', () => {
+    it('attaches the most recent OTHER-weight appearance when this is a first appearance here', async () => {
+      const rows = await editionEntries(db, SRC, W, SEASON, d4)
+      const gio = rows.find((r) => r.name === 'Gio')
+      expect(gio).toMatchObject({ rank: 4, prevRank: null, prevWeight: { weight: 285, rank: 1 } })
+    })
+
+    it('never attaches one when the wrestler has real movement at this weight already', async () => {
+      // Arn has prevRank at 125 itself in d2 — the cross-weight lookup must
+      // stay null even though Arn has no OTHER-weight history to find anyway;
+      // this pins the "only meaningful when prevRank is null" contract.
+      const rows = await editionEntries(db, SRC, W, SEASON, d2)
+      const arn = rows.find((r) => r.name === 'Arn')
+      expect(arn).toMatchObject({ prevRank: 1, prevWeight: null })
+    })
+
+    it('stays null for a genuinely brand-new wrestler with no history at any weight', async () => {
+      const rows = await editionEntries(db, SRC, W, SEASON, d2)
+      const dye = rows.find((r) => r.name === 'Dye')
+      expect(dye).toMatchObject({ prevRank: null, prevWeight: null })
+    })
+
+    it('never attaches one for an unresolved (NULL wrestler_id) entry', async () => {
+      const rows = await editionEntries(db, SRC, W, SEASON, d1)
+      const mystery = rows.find((r) => r.name === 'Mystery Guy')
+      expect(mystery).toMatchObject({ prevRank: null, prevWeight: null })
+    })
+  })
+
   it('keeps tied ranks and orders them by raw_source_string', async () => {
     const rows = await editionEntries(db, SRC, W, SEASON, d4)
     const tied = rows.filter((r) => r.rank === 6)
@@ -224,7 +259,9 @@ describe('editionEntries', () => {
 describe('seasonSeries', () => {
   it('builds one series per resolved wrestler, in first-appearance order', async () => {
     const series = await seasonSeries(db, SRC, W, SEASON)
-    expect(series.map((s) => s.name)).toEqual(['Arn', 'Boe', 'Cox', 'Dye', 'Eck', 'Fox'])
+    // Gio's first 125lbs appearance is d4 at rank 4, ahead of Eck/Fox (also
+    // first-seen d4, but rank 6) — ORDER BY published_date, rank.
+    expect(series.map((s) => s.name)).toEqual(['Arn', 'Boe', 'Cox', 'Dye', 'Gio', 'Eck', 'Fox'])
   })
 
   it('maps ranks onto derived week numbers', async () => {

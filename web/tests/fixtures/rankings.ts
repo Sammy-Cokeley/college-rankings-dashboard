@@ -18,6 +18,7 @@ export function rankingRow(rank: number, overrides: Partial<RankingRow> = {}): R
     grade: 'SR',
     prevRank: rank,
     wrestlerId: 100 + rank,
+    prevWeight: null,
     ...overrides,
   }
 }
