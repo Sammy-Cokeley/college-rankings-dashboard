@@ -60,14 +60,23 @@ func TestIntermatRecord_IngestsFixture(t *testing.T) {
 		t.Errorf("resolved entries after ingest = %d, want 0", got)
 	}
 
-	// Conference/Record are folded into raw_source_string, not dropped.
-	var name string
+	// Conference/Record land in their own columns (db/migrations/0005), not
+	// folded into raw_source_string — the name stays clean, matching Flo's
+	// shape, since the rankings table renders raw_source_string directly.
+	var name, conference, record string
 	if err := db.QueryRow(
-		`SELECT raw_source_string FROM ranking_entries WHERE rank = 1 AND raw_school = 'NC State'`).Scan(&name); err != nil {
+		`SELECT raw_source_string, raw_conference, raw_record FROM ranking_entries WHERE rank = 1 AND raw_school = 'NC State'`,
+	).Scan(&name, &conference, &record); err != nil {
 		t.Fatalf("query rank-1 entry: %v", err)
 	}
-	if want := "Vincent Robinson — 9-1, ACC"; name != want {
-		t.Errorf("raw_source_string = %q, want %q", name, want)
+	if name != "Vincent Robinson" {
+		t.Errorf("raw_source_string = %q, want %q", name, "Vincent Robinson")
+	}
+	if conference != "ACC" {
+		t.Errorf("raw_conference = %q, want %q", conference, "ACC")
+	}
+	if record != "9-1" {
+		t.Errorf("raw_record = %q, want %q", record, "9-1")
 	}
 }
 

@@ -44,6 +44,18 @@ roughly doubles v1 vs the launch set alone — accepted explicitly.)_
    were the minimum to prove the plumbing works, not a considered design) and
    whatever cross-source presentation questions come up once InterMat's real
    data exists.
+   **Resolved (2026-09-19):** InterMat added to `SOURCES`. The predicted
+   cross-source presentation question materialized immediately: InterMat
+   publishes Conference and season W-L Record, which FloWrestling's schema
+   never needed and which an earlier ingest pass had folded into
+   `raw_source_string` (a display-breaking workaround, not a real fix — the
+   rankings table renders that field directly as the wrestler's name).
+   Given real schema columns instead (`raw_conference`/`raw_record`,
+   db/migrations/0005), same pattern as the existing `raw_school`/
+   `raw_grade`. The weight-page table shows CONF/RECORD columns only when
+   the selected source actually publishes them (InterMat); the all-weights
+   overview intentionally keeps its existing compact column set rather than
+   growing per-source columns there too.
 7. Real home page (after multi-source, so it can show both sources)
 8. Register ranklines.com; rename + og:image/share meta (see Web UI below)
 9. In-season ops: Pi cron, new-season Flo container discovery, weekly InterMat

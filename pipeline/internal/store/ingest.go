@@ -43,9 +43,9 @@ func IngestEdition(ctx context.Context, db *sql.DB, snap Snapshot, entries []Ran
 
 	for _, e := range entries {
 		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO ranking_entries (snapshot_id, wrestler_id, rank, raw_source_string, raw_school, raw_grade)
-			 VALUES ($1, $2, $3, $4, $5, $6)`,
-			snapshotID, e.WrestlerID, e.Rank, e.RawSourceString, e.RawSchool, e.RawGrade); err != nil {
+			`INSERT INTO ranking_entries (snapshot_id, wrestler_id, rank, raw_source_string, raw_school, raw_grade, raw_conference, raw_record)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+			snapshotID, e.WrestlerID, e.Rank, e.RawSourceString, e.RawSchool, e.RawGrade, e.RawConference, e.RawRecord); err != nil {
 			return 0, false, fmt.Errorf("insert entry (rank %d, %q): %w", e.Rank, e.RawSourceString, err)
 		}
 	}

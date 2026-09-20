@@ -19,10 +19,12 @@ type Snapshot struct {
 
 // RankingEntry is a wrestler's position within one snapshot. WrestlerID is nil
 // until the raw entry is resolved to a canonical wrestler. RawSourceString is
-// the published identity string (e.g. the name cell); RawSchool and RawGrade
-// hold the school and eligibility as published that week (point-in-time, hence
-// on the entry, not the canonical wrestler). All three are retained verbatim;
-// RawSchool/RawGrade are nil for sources that don't split those fields.
+// the published identity string (e.g. the name cell); RawSchool, RawGrade,
+// RawConference, and RawRecord hold point-in-time published fields (hence on
+// the entry, not the canonical wrestler). All are retained verbatim;
+// RawSchool/RawGrade/RawConference/RawRecord are nil for sources that don't
+// publish those fields (RawConference/RawRecord are InterMat-only today —
+// db/migrations/0005).
 type RankingEntry struct {
 	ID              int64
 	SnapshotID      int64
@@ -31,6 +33,8 @@ type RankingEntry struct {
 	RawSourceString string
 	RawSchool       *string
 	RawGrade        *string
+	RawConference   *string
+	RawRecord       *string
 }
 
 // Movement pairs an entry's current rank with that wrestler's previous rank for
@@ -64,9 +68,9 @@ func InsertSnapshot(ctx context.Context, db *sql.DB, s Snapshot) (int64, error) 
 func InsertRankingEntry(ctx context.Context, db *sql.DB, e RankingEntry) (int64, error) {
 	var id int64
 	err := db.QueryRowContext(ctx,
-		`INSERT INTO ranking_entries (snapshot_id, wrestler_id, rank, raw_source_string, raw_school, raw_grade)
-		 VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-		e.SnapshotID, e.WrestlerID, e.Rank, e.RawSourceString, e.RawSchool, e.RawGrade).Scan(&id)
+		`INSERT INTO ranking_entries (snapshot_id, wrestler_id, rank, raw_source_string, raw_school, raw_grade, raw_conference, raw_record)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+		e.SnapshotID, e.WrestlerID, e.Rank, e.RawSourceString, e.RawSchool, e.RawGrade, e.RawConference, e.RawRecord).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("insert ranking entry: %w", err)
 	}
@@ -92,7 +96,7 @@ func GetSnapshot(ctx context.Context, db *sql.DB, id int64) (Snapshot, error) {
 // database's arbitrary order for equal keys.
 func ListEntries(ctx context.Context, db *sql.DB, snapshotID int64) ([]RankingEntry, error) {
 	rows, err := db.QueryContext(ctx,
-		`SELECT id, snapshot_id, wrestler_id, rank, raw_source_string, raw_school, raw_grade
+		`SELECT id, snapshot_id, wrestler_id, rank, raw_source_string, raw_school, raw_grade, raw_conference, raw_record
 		 FROM ranking_entries WHERE snapshot_id = $1 ORDER BY rank, raw_source_string`, snapshotID)
 	if err != nil {
 		return nil, fmt.Errorf("list entries for snapshot %d: %w", snapshotID, err)
@@ -102,7 +106,7 @@ func ListEntries(ctx context.Context, db *sql.DB, snapshotID int64) ([]RankingEn
 	var out []RankingEntry
 	for rows.Next() {
 		var e RankingEntry
-		if err := rows.Scan(&e.ID, &e.SnapshotID, &e.WrestlerID, &e.Rank, &e.RawSourceString, &e.RawSchool, &e.RawGrade); err != nil {
+		if err := rows.Scan(&e.ID, &e.SnapshotID, &e.WrestlerID, &e.Rank, &e.RawSourceString, &e.RawSchool, &e.RawGrade, &e.RawConference, &e.RawRecord); err != nil {
 			return nil, err
 		}
 		out = append(out, e)
