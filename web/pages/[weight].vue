@@ -256,7 +256,7 @@ useSeoMeta({
             <td class="name">{{ row.name }}</td>
             <td class="school school-toggle" @click.stop="toggleSchool(row.school)">{{ row.school }}</td>
             <td class="grade">{{ row.grade }}</td>
-            <td class="num"><MovementBadge :rank="row.rank" :prev-rank="row.prevRank" /></td>
+            <td class="num"><MovementBadge :rank="row.rank" :prev-rank="row.prevRank" :prev-weight="row.prevWeight" /></td>
           </tr>
         </tbody>
       </table>

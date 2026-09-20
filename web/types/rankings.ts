@@ -15,6 +15,13 @@ export interface RankingRow {
   grade: string | null // raw_grade
   prevRank: number | null // LAG over published_date (schema.md §5); null = first appearance
   wrestlerId: number | null // canonical identity; null until resolved
+  // Cross-weight annotation (decisions.md "Cross-weight annotation"): when
+  // this is a first appearance at THIS weight (prevRank null), the
+  // wrestler's most recent appearance at a DIFFERENT weight this source+
+  // season, if any. Always null when prevRank is non-null — irrelevant once
+  // movement is already shown. Unresolved entries never get one (no
+  // identity to follow across weights).
+  prevWeight: { weight: number; rank: number } | null
 }
 
 export interface SeriesPoint {

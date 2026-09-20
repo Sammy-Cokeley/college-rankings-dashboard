@@ -65,6 +65,28 @@ export async function latestDate(
 // wrestler_id) get a NULL prev_rank via CASE. Postgres's LAG lumps all NULLs
 // into one partition, which would fabricate movement between unrelated
 // unresolved wrestlers.
+//
+// Cross-weight annotation (decisions.md): a first appearance at THIS weight
+// (prev_rank NULL) isn't necessarily a new wrestler — they may have been
+// ranked at a DIFFERENT weight before. The LATERAL join finds their most
+// recent other-weight appearance strictly before this edition's date (a
+// same-date appearance at another weight is the documented "current weight
+// is ambiguous" edge case — deliberately not resolved by picking one). Only
+// meaningful when prev_rank is NULL; computed unconditionally since it's
+// cheap at this project's per-weight row counts, not worth a conditional join.
+// Raw shape of one editionEntries SQL row, before prevWeightClass/
+// prevWeightRank are folded into RankingRow.prevWeight.
+interface EditionEntryRow {
+  rank: number
+  name: string
+  school: string | null
+  grade: string | null
+  prevRank: number | null
+  wrestlerId: number | null
+  prevWeightClass: number | null
+  prevWeightRank: number | null
+}
+
 export async function editionEntries(
   db: Db,
   sourceId: number,
@@ -72,7 +94,7 @@ export async function editionEntries(
   season: number,
   date: string,
 ): Promise<RankingRow[]> {
-  const rows = await db<RankingRow[]>`
+  const rows = await db<EditionEntryRow[]>`
     WITH season_entries AS (
       SELECT s.published_date,
              e.rank,
@@ -90,16 +112,35 @@ export async function editionEntries(
       JOIN snapshots s ON s.id = e.snapshot_id
       WHERE s.source_id = ${sourceId} AND s.weight_class = ${weight} AND s.season = ${season}
     )
-    SELECT rank,
-           raw_source_string AS name,
-           raw_school        AS school,
-           raw_grade         AS grade,
-           prev_rank         AS "prevRank",
-           wrestler_id       AS "wrestlerId"
-    FROM season_entries
-    WHERE published_date = ${date}
-    ORDER BY rank, raw_source_string`
-  return rows
+    SELECT se.rank,
+           se.raw_source_string AS name,
+           se.raw_school        AS school,
+           se.raw_grade         AS grade,
+           se.prev_rank         AS "prevRank",
+           se.wrestler_id       AS "wrestlerId",
+           cw.weight_class      AS "prevWeightClass",
+           cw.rank              AS "prevWeightRank"
+    FROM season_entries se
+    LEFT JOIN LATERAL (
+      SELECT s2.weight_class, e2.rank
+      FROM ranking_entries e2
+      JOIN snapshots s2 ON s2.id = e2.snapshot_id
+      WHERE s2.source_id = ${sourceId} AND s2.season = ${season}
+        AND s2.weight_class != ${weight}
+        AND e2.wrestler_id = se.wrestler_id
+        AND s2.published_date < se.published_date
+      ORDER BY s2.published_date DESC
+      LIMIT 1
+    ) cw ON true
+    WHERE se.published_date = ${date}
+    ORDER BY se.rank, se.raw_source_string`
+  return rows.map(({ prevWeightClass, prevWeightRank, ...row }) => ({
+    ...row,
+    prevWeight:
+      row.prevRank === null && prevWeightClass !== null && prevWeightRank !== null
+        ? { weight: prevWeightClass, rank: prevWeightRank }
+        : null,
+  }))
 }
 
 // seasonSeries groups a whole weight/season into one rank-over-week line per
