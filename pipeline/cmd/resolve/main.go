@@ -2,7 +2,10 @@
 // entries, reconciling raw name+school strings to canonical wrestlers. Safe
 // to re-run: already-resolved entries are skipped.
 //
-// Always resolves FloWrestling's ranking entries. Pass -roster-season to also
+// Always resolves FloWrestling's and InterMat's ranking entries — both are
+// ordinary ranking-entries sources via the same source-agnostic
+// resolve.Source, so there's nothing to gate on (an InterMat source with no
+// ingested entries yet is just a no-op run). Pass -roster-season to also
 // resolve WrestleStat's roster entries for that season — optional and
 // separate because roster ingestion (cmd/roster) may not have run yet, and
 // this command must stay usable without it.
@@ -20,8 +23,9 @@ import (
 )
 
 const (
-	sourceName       = "FloWrestling"
-	rosterSourceName = "WrestleStat"
+	sourceName         = "FloWrestling"
+	intermatSourceName = "InterMat"
+	rosterSourceName   = "WrestleStat"
 )
 
 func main() {
@@ -43,6 +47,13 @@ func main() {
 	}
 	log.Printf("resolved %d %s entries: %d wrestlers created, %d aliases recorded",
 		res.EntriesResolved, sourceName, res.WrestlersCreated, res.AliasesCreated)
+
+	ires, err := resolve.Source(ctx, db, intermatSourceName)
+	if err != nil {
+		log.Fatalf("resolve %s: %v", intermatSourceName, err)
+	}
+	log.Printf("resolved %d %s entries: %d wrestlers created, %d aliases recorded",
+		ires.EntriesResolved, intermatSourceName, ires.WrestlersCreated, ires.AliasesCreated)
 
 	if *rosterSeason != 0 {
 		rres, err := resolve.Roster(ctx, db, rosterSourceName, *rosterSeason)

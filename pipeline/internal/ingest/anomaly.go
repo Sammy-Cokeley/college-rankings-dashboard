@@ -3,8 +3,6 @@ package ingest
 import (
 	"fmt"
 	"sort"
-
-	"pipeline/internal/scraper"
 )
 
 // EditionAnomaly records a non-fatal structural oddity in an edition that still
@@ -23,9 +21,11 @@ func (a EditionAnomaly) String() string {
 	return fmt.Sprintf("weight %d %s: %v", a.WeightClass, a.PublishedDate, a.Issues)
 }
 
-// detectAnomalies scans an edition's parsed rows for non-fatal rank oddities and
-// returns a human-readable description of each, or nil when the sequence is
-// clean. Two checks, both against the published ranks only:
+// detectAnomalies scans an edition's published ranks for non-fatal rank
+// oddities and returns a human-readable description of each, or nil when the
+// sequence is clean. Source-agnostic (takes ranks, not a source's Row type —
+// shared by Flo's and InterMat's ingest, see ingest.go/intermat.go). Two
+// checks:
 //
 //   - duplicate ranks — two rows share a rank (a tie; e.g. 197 2026-03-27, where
 //     Flo hand-entered two wrestlers at 21). The schema stores ties verbatim
@@ -34,13 +34,13 @@ func (a EditionAnomaly) String() string {
 //
 // Both are surfaced, never corrected: the rule is to store what the source
 // published and flag it, not to silently renumber.
-func detectAnomalies(rows []scraper.Row) []string {
-	counts := make(map[int]int, len(rows))
+func detectAnomalies(ranks []int) []string {
+	counts := make(map[int]int, len(ranks))
 	maxRank := 0
-	for _, r := range rows {
-		counts[r.Rank]++
-		if r.Rank > maxRank {
-			maxRank = r.Rank
+	for _, rank := range ranks {
+		counts[rank]++
+		if rank > maxRank {
+			maxRank = rank
 		}
 	}
 

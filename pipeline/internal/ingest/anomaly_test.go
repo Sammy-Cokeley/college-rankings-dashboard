@@ -14,32 +14,24 @@ import (
 // only fixture that contains the real-world tie anomaly (197 2026-03-27).
 var fullFixtureFile = filepath.Join("..", "scraper", "testdata", "ranking_container_14300895_10weights.json")
 
-func rowsAt(ranks ...int) []scraper.Row {
-	out := make([]scraper.Row, 0, len(ranks))
-	for _, r := range ranks {
-		out = append(out, scraper.Row{Rank: r})
-	}
-	return out
-}
-
 func TestDetectAnomalies(t *testing.T) {
 	cases := []struct {
 		name  string
-		rows  []scraper.Row
+		ranks []int
 		wantN int // number of issue strings
 	}{
-		{"clean contiguous", rowsAt(1, 2, 3, 4, 5), 0},
-		{"tie only", rowsAt(1, 2, 2, 3), 1},
-		{"gap only", rowsAt(1, 2, 4, 5), 1},
-		{"tie and gap (the 197 shape)", rowsAt(20, 21, 21, 22, 24), 2},
-		{"single row", rowsAt(1), 0},
+		{"clean contiguous", []int{1, 2, 3, 4, 5}, 0},
+		{"tie only", []int{1, 2, 2, 3}, 1},
+		{"gap only", []int{1, 2, 4, 5}, 1},
+		{"tie and gap (the 197 shape)", []int{20, 21, 21, 22, 24}, 2},
+		{"single row", []int{1}, 0},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := detectAnomalies(c.rows)
+			got := detectAnomalies(c.ranks)
 			if len(got) != c.wantN {
 				t.Errorf("detectAnomalies(%v) = %v (%d issues), want %d",
-					c.rows, got, len(got), c.wantN)
+					c.ranks, got, len(got), c.wantN)
 			}
 		})
 	}
