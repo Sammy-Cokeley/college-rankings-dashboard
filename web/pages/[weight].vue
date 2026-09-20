@@ -165,6 +165,11 @@ function switchSource(slug: string) {
   navigateTo({ query })
 }
 
+// Only InterMat publishes these (schema.md §1 raw_conference/raw_record) — Flo
+// and the Fan Poll rows are always null, so the columns simply don't render.
+const hasConference = computed(() => edition.value?.entries.some((e) => e.conference !== null) ?? false)
+const hasRecord = computed(() => edition.value?.entries.some((e) => e.record !== null) ?? false)
+
 const seasonLabel = computed(() =>
   edition.value ? `${edition.value.season - 1}-${String(edition.value.season).slice(2)}` : '',
 )
@@ -235,6 +240,8 @@ useSeoMeta({
             <th>Wrestler</th>
             <th>School</th>
             <th>YR</th>
+            <th v-if="hasConference">CONF</th>
+            <th v-if="hasRecord">RECORD</th>
             <th class="num">Move</th>
           </tr>
         </thead>
@@ -256,6 +263,8 @@ useSeoMeta({
             <td class="name">{{ row.name }}</td>
             <td class="school school-toggle" @click.stop="toggleSchool(row.school)">{{ row.school }}</td>
             <td class="grade">{{ row.grade }}</td>
+            <td v-if="hasConference" class="grade">{{ row.conference }}</td>
+            <td v-if="hasRecord" class="grade">{{ row.record }}</td>
             <td class="num"><MovementBadge :rank="row.rank" :prev-rank="row.prevRank" :prev-weight="row.prevWeight" /></td>
           </tr>
         </tbody>
