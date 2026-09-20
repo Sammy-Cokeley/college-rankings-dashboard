@@ -15,6 +15,7 @@ export interface RankingSource {
 export const SOURCES: readonly RankingSource[] = [
   { name: 'FloWrestling', slug: 'flowrestling' },
   { name: 'Fan Poll', slug: 'fan-poll' },
+  { name: 'InterMat', slug: 'intermat' },
 ]
 
 export const DEFAULT_SOURCE = SOURCES[0]!

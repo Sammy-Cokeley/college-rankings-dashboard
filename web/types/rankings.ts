@@ -22,6 +22,8 @@ export interface RankingRow {
   // movement is already shown. Unresolved entries never get one (no
   // identity to follow across weights).
   prevWeight: { weight: number; rank: number } | null
+  conference: string | null // raw_conference; null for sources that don't publish it
+  record: string | null // raw_record; null for sources that don't publish it
 }
 
 export interface SeriesPoint {

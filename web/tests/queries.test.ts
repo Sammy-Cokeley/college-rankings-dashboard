@@ -244,6 +244,26 @@ describe('editionEntries', () => {
     expect(rows[3]).toMatchObject({ name: 'Mystery Guy', school: null, grade: null })
   })
 
+  it('carries raw_conference and raw_record through verbatim, null when unpublished', async () => {
+    const rows = await editionEntries(db, SRC, W, SEASON, d1)
+    expect(rows[0]).toMatchObject({ name: 'Arn', conference: null, record: null })
+
+    // FloWrestling (this corpus's source) never publishes these — only
+    // InterMat does — so prove the passthrough with a one-off snapshot/entry
+    // carrying real values, same source, a weight/date the shared corpus
+    // doesn't use.
+    const [{ id: snapId }] = await db<{ id: number }[]>`
+      INSERT INTO snapshots (source_id, weight_class, season, published_date, captured_at)
+      VALUES (${SRC}, 197, ${SEASON}, '2026-02-01', '2026-02-01T12:00:00Z') RETURNING id`
+    await db`
+      INSERT INTO ranking_entries
+        (snapshot_id, wrestler_id, rank, raw_source_string, raw_school, raw_grade, raw_conference, raw_record)
+      VALUES (${snapId}, NULL, 1, 'Hix', 'Iowa', 'SR', 'Big Ten', '20-1')`
+
+    const hixRows = await editionEntries(db, SRC, 197, SEASON, '2026-02-01')
+    expect(hixRows[0]).toMatchObject({ name: 'Hix', conference: 'Big Ten', record: '20-1' })
+  })
+
   it('returns empty for a date with no snapshot', async () => {
     expect(await editionEntries(db, SRC, W, SEASON, '1999-01-01')).toEqual([])
   })

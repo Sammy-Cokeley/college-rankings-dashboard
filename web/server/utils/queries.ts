@@ -85,6 +85,8 @@ interface EditionEntryRow {
   wrestlerId: number | null
   prevWeightClass: number | null
   prevWeightRank: number | null
+  conference: string | null
+  record: string | null
 }
 
 export async function editionEntries(
@@ -102,6 +104,8 @@ export async function editionEntries(
              e.raw_source_string,
              e.raw_school,
              e.raw_grade,
+             e.raw_conference AS conference,
+             e.raw_record AS record,
              CASE WHEN e.wrestler_id IS NULL THEN NULL ELSE
                LAG(e.rank) OVER (
                  PARTITION BY s.source_id, s.weight_class, s.season, e.wrestler_id
@@ -116,6 +120,8 @@ export async function editionEntries(
            se.raw_source_string AS name,
            se.raw_school        AS school,
            se.raw_grade         AS grade,
+           se.conference        AS conference,
+           se.record            AS record,
            se.prev_rank         AS "prevRank",
            se.wrestler_id       AS "wrestlerId",
            cw.weight_class      AS "prevWeightClass",
