@@ -190,3 +190,95 @@ P4P/Team sections).
 in-season = weekly RSS poll → fetch current `ncaa-di-rNN` record page;
 backfill 2025-26 = Wayback CDX → ~24 record snapshots. No headless browser,
 nothing heavy on the Pi. NWCA fallback not needed.
+
+## Update (2026-09-12) — backfill scraper built, real findings confirmed
+
+`pipeline/internal/scraper/intermat/` implements the backfill path (§ open
+questions above are now resolved or superseded, not just answered in theory):
+
+- **CDX response format confirmed live**: plain space-separated text (not
+  JSON), fields `urlkey timestamp original mimetype statuscode digest
+  length`, one capture per line. `collapse=urlkey` on the query keeps only
+  the earliest capture per record id server-side.
+- **Real record range for 2025-26 DI**: r53 (2025-09-05, the season's very
+  first edition) through r75 (2026-03-10) — 20 confirmed 200-status
+  snapshots. Record ids are a **global counter shared across DI/DII/DIII**
+  (gaps in the DI sequence are DII/DIII ids), confirming open question #3's
+  suspicion.
+- **Open question #4 materialized for real, not hypothetically — but was
+  recoverable a different way**: r76 (and everything after) has **zero
+  Wayback captures** — the true postseason-final edition (16 rows, `FINISH`
+  header, no RECORD/LAST) was never snapshotted. It turned out to still be
+  **live** on intermatwrestle.com when checked (2026-09-12) — InterMat hadn't
+  yet replaced it for the 2026-27 season — so it was fetched directly and
+  saved immediately, since an unarchived-but-live page can disappear at any
+  time (it did: 404 by 2026-09-19, replaced for the new season). Parsing it
+  surfaced one more real wrinkle: the bottom 8 of each weight's 16 finishers
+  report a non-numeric bracket code (`R12`/`R16`) instead of a place number —
+  mapped to a tie-group rank, not failed (`finishCodeRanks` in `table.go`).
+  Recovered into the DB via `cmd/backfill-intermat`'s new `-recover-file`/
+  `-recover-url` flags (added for exactly this situation), with an
+  **estimated** published date (2026-03-24, inferred from the 2026 NCAA DI
+  finals wrapping up 2026-03-21/22 — the page itself carries no date).
+  `scraper/intermat/testdata/record_r76_2weights.html` is a real trimmed
+  fixture now, not just the hand-built synthetic one `table_test.go` also
+  keeps.
+- **Real page markup** (confirmed on r53/r63 snapshots): each weight is one
+  `<table class="ipsTable...">` whose FIRST row is a title banner (one cell,
+  `colspan` spanning every column, text like `125lbs`), NOT the header — the
+  second row is the real header. Neither row uses `<th>` — bold text inside
+  plain `<td>` cells (`<td><b>RANK</b></td>...`). `colspan` cannot be
+  trusted as the true column count (r53's preseason banner says
+  `colspan="7"` while the real header that follows has only 6 columns) —
+  only the header row itself is authoritative.
+- **Real data quirks found in the actual corpus** (both documented and
+  exercised in tests, not filtered out): a genuine hand-entry gap (r53
+  125lbs rank 19, Brendan McCrone, published with no RECORD cell — a true
+  ragged row) and a stray fully-empty trailing `<tr>` in r53's 285lbs table
+  (structural padding, correctly distinguished from a ragged data row and
+  dropped silently). See `scraper/intermat/testdata/README.md`. **The
+  Brendan McCrone gap is now closed in the DB** (not in the fixture, which
+  intentionally keeps the real ragged row to test fail-loud behavior — see
+  below): checked all 3 real Wayback captures spanning r53's entire ~7-week
+  live period (2025-09-05 → 2025-10-16) and the cell was blank in every one
+  — a permanent gap in InterMat's own source, not a transient publishing
+  glitch. The user manually confirmed the value (0-0, consistent with every
+  other wrestler in that preseason edition) and it was patched into a local
+  copy of the source HTML and re-ingested via `-recover-file` (idempotent —
+  only the previously-missing 125lbs snapshot was newly created, the other
+  9 already-ingested weights were skipped). **200/200 weight-snapshots,
+  6,430 entries, zero gaps.**
+- Fixtures are **trimmed HTML extracts**, not full page copies — decided
+  with the user given the repo is now public (this doc's earlier "flag
+  raised, not resolved" fixture-strategy note is now resolved).
+- **Not built yet**: live in-season fetching (RSS poll → current record
+  page). The table-parsing core (`ParseRecord`/`ParseRows`) is deliberately
+  fetch-source-agnostic — identical whether fed live InterMat HTML or a
+  Wayback snapshot — so this is a small follow-up, not a redesign, when
+  picked up.
+- **A CDX scoping bug found (and fixed) the hard way**: an unscoped query for
+  `ncaa-di*` (no trailing `-r`) is a trap — as a CDX prefix match it ALSO
+  matches `ncaa-dii-*`/`ncaa-diii-*` (since `ncaa-di` is a literal string
+  prefix of both), and with no `from`/`to` date bound it returns every
+  season InterMat has ever published, not just the one being backfilled. A
+  first real run pulled 359 wrong-division/wrong-season snapshots into the
+  dev DB before failures (mismatched column headers from older seasons —
+  "NAME" instead of "WRESTLER", "Place"/"Year", regional-conference
+  variants) surfaced the problem; cleaned up and re-run correctly scoped
+  (`ncaa-di-r*` + a season-derived `from`/`to` range —
+  `pipeline/cmd/backfill-intermat/main.go`'s `seasonDateRange`).
+- **A Wayback *replay* quirk, also fixed, not just worked around**: `r57`
+  (2025-11-19) is CDX-indexed as a 200-status capture but consistently
+  404s on the plain replay URL — confirmed stable across retries and a
+  cooldown period, not rate limiting. The `id_` modifier (raw captured
+  bytes, no link-rewriting) serves it fine, and serves already-working
+  captures identically — so `SnapshotURL` now always uses `id_`, a strict
+  improvement rather than a special case to maintain.
+- **Real backfill result, final (2026-09-19, season 2026)**: all 19 of the
+  season's regular-season records ingested, all 190 weight-snapshots
+  present (the r53/125lbs ragged row closed via the manual patch above)
+  **plus** the recovered postseason-final r76 (10/10 weights) — **20
+  records, 200 snapshots, 6,430 ranking entries total**, resolving cleanly
+  to canonical wrestlers with zero `canonicalSchools` additions needed. The
+  2025-26 DI season backfill is complete — all three real gaps (r57's
+  replay quirk, r76's missing capture, r53's hand-entry gap) filled.

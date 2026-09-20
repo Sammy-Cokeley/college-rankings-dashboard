@@ -65,6 +65,8 @@ CREATE TABLE ranking_entries (
   raw_source_string TEXT NOT NULL,     -- published identity string; never lose this
   raw_school        TEXT,              -- school as published this week (point-in-time)
   raw_grade         TEXT,              -- eligibility as published: FR/SO/JR/SR
+  raw_conference    TEXT,              -- conference as published (InterMat only; db/migrations/0005)
+  raw_record        TEXT,              -- season W-L record as published (InterMat only; 0005)
   UNIQUE (snapshot_id, rank, raw_source_string)  -- allows a genuine tie; see §7
 );
  

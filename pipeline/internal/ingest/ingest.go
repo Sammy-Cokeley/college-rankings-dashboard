@@ -81,7 +81,7 @@ func ingestOne(ctx context.Context, db *sql.DB, sourceID int64, we scraper.Weigh
 
 	// Non-fatal: surface rank oddities (ties/gaps) for eyeballing without
 	// blocking ingestion. Detected on every run, including idempotent skips.
-	if issues := detectAnomalies(rows); len(issues) > 0 {
+	if issues := detectAnomalies(rowRanks(rows)); len(issues) > 0 {
 		res.Anomalies = append(res.Anomalies, EditionAnomaly{
 			WeightClass:   we.WeightClass,
 			PublishedDate: we.Edition.PublishDate,
@@ -109,6 +109,17 @@ func ingestOne(ctx context.Context, db *sql.DB, sourceID int64, we scraper.Weigh
 		res.SnapshotsSkipped++
 	}
 	return nil
+}
+
+// rowRanks extracts just the published ranks, for detectAnomalies (which is
+// source-agnostic and takes ranks, not a source's own Row type — shared with
+// intermat.go's ingest path).
+func rowRanks(rows []scraper.Row) []int {
+	ranks := make([]int, len(rows))
+	for i, r := range rows {
+		ranks[i] = r.Rank
+	}
+	return ranks
 }
 
 // toEntries maps parsed rows to unresolved ranking entries. raw_source_string
