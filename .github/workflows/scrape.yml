@@ -1,0 +1,53 @@
+name: Scheduled scrape
+
+# Runs both sources' live scrapers unattended. Daily, not weekly, because
+# IngestEdition is idempotent per (source, weight, season, published_date) —
+# an extra run costs nothing — and both sources' actual publish days drift
+# (docs/sources/intermat.md: RSS title patterns vary week to week), so
+# pinning to one weekday would be guessing at a schedule neither source
+# commits to.
+#
+# FLO_RANKINGS_URL (repo variable) must be a live per-edition page URL from
+# this season's ranking container (docs/sources/flowrestling.md) — container
+# discovery for a NEW season isn't automated yet (decisions.md item 9), so
+# this needs a manual update once FloWrestling rolls over to next season.
+#
+# Until DATABASE_URL (repo secret) points at a real database, every run
+# fails — intentionally: there's no production DB yet, and a scheduled job
+# silently doing nothing would be worse than a loud, expected failure.
+on:
+  schedule:
+    - cron: '17 13 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    defaults:
+      run:
+        working-directory: pipeline
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: pipeline/go.mod
+
+      - name: Scrape FloWrestling
+        id: flo
+        continue-on-error: true
+        run: go run ./cmd/scrape -url "${{ vars.FLO_RANKINGS_URL }}"
+
+      - name: Scrape InterMat
+        id: intermat
+        continue-on-error: true
+        run: go run ./cmd/scrape-intermat
+
+      # Each scraper runs regardless of the other's result (continue-on-error
+      # above), so one source's failure never masks the other's success or
+      # hides its own log output — but the job still needs to end red so
+      # GitHub's built-in failure-email notification fires.
+      - name: Fail the job if either scrape failed
+        if: steps.flo.outcome == 'failure' || steps.intermat.outcome == 'failure'
+        run: exit 1
