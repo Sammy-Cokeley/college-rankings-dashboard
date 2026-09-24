@@ -245,6 +245,15 @@ a {
   gap: 1rem;
 }
 
+/* Below ~phone width the controls wrap onto their own row — flex-end then
+   bottom-aligns them against the title's baseline, which looks wrong once
+   they're stacked. Match the breakpoint index.vue's hero already uses. */
+@media (max-width: 40rem) {
+  .pagehead {
+    align-items: flex-start;
+  }
+}
+
 .pagehead h1 {
   margin: 0;
   font-size: 2.6rem;
@@ -387,9 +396,34 @@ a {
   margin-bottom: 1.5rem;
 }
 
+/* Horizontal scroll for tables wider than the viewport (mobile) — a
+   separate wrapper from .board itself so .board keeps clipping to its
+   rounded corners; only the table scrolls. */
+.table-scroll {
+  overflow-x: auto;
+}
+
 .board table {
   width: 100%;
   border-collapse: collapse;
+}
+
+/* Sticky identity columns so a wrestler stays identifiable while scrolling
+   right for School/YR/Move on narrow viewports. Exact left offset/width per
+   column is page-specific (different column sets on [weight].vue vs
+   rankings.vue) — set in each page's own scoped styles via .col-*. An
+   explicit background is required (cells have none of their own otherwise)
+   so scrolled-under columns don't bleed through. */
+.board td.sticky {
+  position: sticky;
+  background: var(--surface);
+  z-index: 1;
+}
+
+.board th.sticky {
+  position: sticky;
+  background: var(--thead);
+  z-index: 1;
 }
 
 .board th {
@@ -405,18 +439,33 @@ a {
   background: var(--thead);
 }
 
-.board th.sortable {
+/* Sortable headers: the click/keyboard target is a real <button> nested in
+   the <th> (WAI-ARIA wants aria-sort on the header cell itself, not the
+   button — see rankings.vue), reset to inherit the header's own styling. */
+.board th button {
+  all: unset;
   cursor: pointer;
   user-select: none;
+  display: block;
 }
 
-.board th.sortable:hover {
+.board th button:hover {
   color: var(--ink);
 }
 
 .board td {
   padding: 0.5rem 0.9rem;
   border-bottom: 1px solid var(--line);
+}
+
+/* table-layout:auto (the default) shrinks columns and wraps cell text to
+   fit a narrow viewport instead of growing the table past it — which would
+   silently defeat .table-scroll (nothing to scroll to if content just
+   squishes). Force natural single-line widths so the table actually
+   overflows and the scroll container engages. */
+.board th,
+.board td {
+  white-space: nowrap;
 }
 
 .board tr:last-child td {
@@ -436,7 +485,6 @@ a {
   font-family: var(--font-mono);
   font-weight: 600;
   color: var(--muted);
-  white-space: nowrap;
 }
 
 .board td.rank {
@@ -483,7 +531,19 @@ a {
   box-shadow: inset 3px 0 0 var(--row-accent, var(--accent));
 }
 
-.board td.school-toggle:hover {
+/* Row/school toggle buttons: real <button>s (keyboard-operable) styled to
+   read as plain cell text, filling the cell so tap targets stay full-width
+   on mobile. The <tr>'s own click handler still covers the rest of the row
+   for mouse users; these use .stop so a click doesn't double-toggle. */
+.board .row-toggle,
+.board .school-toggle {
+  all: unset;
+  display: block;
+  width: 100%;
+  cursor: pointer;
+}
+
+.board .school-toggle:hover {
   color: var(--ink);
   text-decoration: underline;
   text-decoration-style: dotted;

@@ -233,44 +233,67 @@ useSeoMeta({
     </div>
 
     <div class="board">
-      <table>
-        <thead>
-          <tr>
-            <th class="num">RK</th>
-            <th>Wrestler</th>
-            <th>School</th>
-            <th>YR</th>
-            <th v-if="hasConference">CONF</th>
-            <th v-if="hasRecord">RECORD</th>
-            <th class="num">Move</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="row in edition.entries"
-            :key="`${row.rank}-${row.name}`"
-            class="selectable"
-            :class="{
-              selected: rowSelectionIndex(row.wrestlerId) >= 0,
-              folded: !expanded && row.rank > FOLD_RANK,
-            }"
-            :style="rowSelectionIndex(row.wrestlerId) >= 0
-              ? { '--row-accent': `var(--chart-${rowSelectionIndex(row.wrestlerId) % 6})` }
-              : undefined"
-            @click="toggleWrestler(row.wrestlerId)"
-          >
-            <td class="num rank" :class="{ top: row.rank <= 3 }">{{ row.rank }}</td>
-            <td class="name">{{ row.name }}</td>
-            <td class="school school-toggle" @click.stop="toggleSchool(row.school)">{{ row.school }}</td>
-            <td class="grade">{{ row.grade }}</td>
-            <td v-if="hasConference" class="grade">{{ row.conference }}</td>
-            <td v-if="hasRecord" class="grade">{{ row.record }}</td>
-            <td class="num"><MovementBadge :rank="row.rank" :prev-rank="row.prevRank" :prev-weight="row.prevWeight" /></td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th class="num sticky col-rank">RK</th>
+              <th class="sticky col-name">Wrestler</th>
+              <th>School</th>
+              <th>YR</th>
+              <th v-if="hasConference">CONF</th>
+              <th v-if="hasRecord">RECORD</th>
+              <th class="num">Move</th>
+            </tr>
+          </thead>
+          <tbody id="edition-entries">
+            <tr
+              v-for="row in edition.entries"
+              :key="`${row.rank}-${row.name}`"
+              class="selectable"
+              :class="{
+                selected: rowSelectionIndex(row.wrestlerId) >= 0,
+                folded: !expanded && row.rank > FOLD_RANK,
+              }"
+              :style="rowSelectionIndex(row.wrestlerId) >= 0
+                ? { '--row-accent': `var(--chart-${rowSelectionIndex(row.wrestlerId) % 6})` }
+                : undefined"
+              @click="toggleWrestler(row.wrestlerId)"
+            >
+              <td class="num rank sticky col-rank" :class="{ top: row.rank <= 3 }">{{ row.rank }}</td>
+              <td class="name sticky col-name">
+                <button
+                  v-if="row.wrestlerId !== null"
+                  type="button"
+                  class="row-toggle"
+                  :aria-pressed="rowSelectionIndex(row.wrestlerId) >= 0"
+                  @click.stop="toggleWrestler(row.wrestlerId)"
+                >{{ row.name }}</button>
+                <span v-else>{{ row.name }}</span>
+              </td>
+              <td class="school">
+                <button
+                  v-if="row.school"
+                  type="button"
+                  class="school-toggle"
+                  @click.stop="toggleSchool(row.school)"
+                >{{ row.school }}</button>
+                <span v-else>{{ row.school }}</span>
+              </td>
+              <td class="grade">{{ row.grade }}</td>
+              <td v-if="hasConference" class="grade">{{ row.conference }}</td>
+              <td v-if="hasRecord" class="grade">{{ row.record }}</td>
+              <td class="num"><MovementBadge :rank="row.rank" :prev-rank="row.prevRank" :prev-weight="row.prevWeight" /></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
       <div v-if="foldedCount > 0" class="fold-toggle">
-        <button @click="expanded = !expanded">
+        <button
+          :aria-expanded="expanded"
+          aria-controls="edition-entries"
+          @click="expanded = !expanded"
+        >
           {{ expanded ? `Show top ${FOLD_RANK} ▴` : `See all ${edition.entries.length} ranked ▾` }}
         </button>
       </div>
@@ -321,3 +344,34 @@ useSeoMeta({
     </p>
   </div>
 </template>
+
+<style scoped>
+/* Sticky column offsets for this page's table (RK + Wrestler) — see
+   main.css .board td.sticky/.board th.sticky for the shared mechanism.
+   .col-rank matches .board td.rank's existing 3rem width so .col-name's
+   offset lines up exactly. */
+.col-rank {
+  left: 0;
+  width: 3rem;
+}
+
+/* table-layout:auto sizes a column to its widest cell — a sticky cell
+   without its own bound drags that FULL natural width along when pinned,
+   which visually overlaps the columns after it (the browser doesn't
+   re-flow siblings around a sticky element's offset). Bound it and
+   truncate instead — the standard fix for a frozen table column. */
+.col-name {
+  left: 3rem;
+  width: 9rem;
+  max-width: 9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: 2px 0 4px -2px rgb(0 0 0 / 25%);
+}
+
+.col-name button,
+.col-name span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+</style>

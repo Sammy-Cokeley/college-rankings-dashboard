@@ -200,6 +200,7 @@ useSeoMeta({ title: () => `Build your ${weight.value} ballot — NCAA DI Wrestli
               :key="s.slug"
               type="button"
               :class="{ active: s.slug === referenceSourceSlug }"
+              :aria-current="s.slug === referenceSourceSlug ? 'true' : undefined"
               @click="referenceSourceSlug = s.slug"
             >
               {{ s.name }}
