@@ -114,6 +114,28 @@ roughly doubles v1 vs the launch set alone — accepted explicitly.)_
   merely because two sources exist.
 - NWCA as a displayed source — fallback only, if the InterMat gate fails.
 - InterMat outreach — superseded (see Sources below).
+
+**Flagged for a future pass (2026-09-24) — gaps, not deliberate v1 cuts:**
+- **No email verification on signup.** `web/server/api/auth/signup.post.ts`
+  requires only email + password (Zod schema) and grants a session
+  immediately — anyone can sign up with an email they don't own. No
+  `email_verified`/`verified_at` column exists on `users`
+  (`db/migrations/0003_users.sql`). Found alongside it: there's no
+  password-reset flow anywhere in the codebase either — worth deciding
+  together, since a reset flow typically wants verified email as a
+  prerequisite anyway (don't build one without the other).
+- **No ballot-history / profile view.** No page or endpoint lets a user see
+  their own ballots across weight classes in one place today —
+  `ballot/[weight].vue` and its `GET`/`PATCH` endpoints only ever handle one
+  weight class at a time. Real scope fork before building: the `ballots`
+  table is deliberately "rolling, never-locked" (`db/migrations/0004_ballots.sql`)
+  — one row per `(user_id, weight_class, season)`, no submission timestamps
+  or history rows at all (an explicit simplification when the table was
+  designed, not an oversight). So this is either (a) a **current-ballots-
+  across-weights view** — cheap, just aggregates existing rows, no schema
+  change — or (b) **true submission history over time** — real schema work,
+  since nothing versioned is stored today. Shape TBD; needs a decision, not
+  an assumption, before implementation starts.
 ## Sources
  
 - **v0: FloWrestling — current *and* full historical weekly rankings.** Available
