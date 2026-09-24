@@ -84,9 +84,12 @@ describe('[weight].vue fold', () => {
     expect(foldedRows(wrapper)).toHaveLength(4)
     expect(foldButton(wrapper).text()).toBe('See all 14 ranked ▾')
 
+    expect(foldButton(wrapper).attributes('aria-expanded')).toBe('false')
+
     await foldButton(wrapper).trigger('click')
     expect(foldedRows(wrapper)).toHaveLength(0)
     expect(foldButton(wrapper).text()).toBe('Show top 10 ▴')
+    expect(foldButton(wrapper).attributes('aria-expanded')).toBe('true')
   })
 
   it('keeps every wrestler tied at the fold rank visible', async () => {
@@ -122,9 +125,29 @@ describe('[weight].vue selection', () => {
     expect(selectedRows(wrapper)).toHaveLength(0)
   })
 
-  it('ignores clicks on unresolved rows (no wrestlerId, no line to pin)', async () => {
+  it('renders the wrestler name as a real, keyboard-focusable button reflecting selection state', async () => {
     const wrapper = await mountSuspended(WeightPage)
-    await rows(wrapper)[4]!.trigger('click') // rank 5, wrestlerId null
+    const row1 = rows(wrapper)[0]!
+    const nameButton = row1.find('button.row-toggle')
+
+    expect(nameButton.exists()).toBe(true)
+    expect(nameButton.element.tagName).toBe('BUTTON')
+    expect(nameButton.attributes('aria-pressed')).toBe('false')
+
+    // Clicking the button itself (not just the row) must toggle, and not
+    // double-toggle via the row's own click handler bubbling underneath it.
+    await nameButton.trigger('click')
+    await settle(wrapper)
+    expect(routeStub.query.sel).toBe('101')
+    expect(nameButton.attributes('aria-pressed')).toBe('true')
+  })
+
+  it('ignores clicks on unresolved rows (no wrestlerId, no line to pin) and renders no toggle button', async () => {
+    const wrapper = await mountSuspended(WeightPage)
+    const unresolvedRow = rows(wrapper)[4]! // rank 5, wrestlerId null
+    expect(unresolvedRow.find('button.row-toggle').exists()).toBe(false)
+
+    await unresolvedRow.trigger('click')
     await settle(wrapper)
     expect(routeStub.query.sel).toBeUndefined()
     expect(selectedRows(wrapper)).toHaveLength(0)
@@ -132,7 +155,8 @@ describe('[weight].vue selection', () => {
 
   it('selects the whole school on school-cell click and auto-expands past the fold', async () => {
     const wrapper = await mountSuspended(WeightPage)
-    const iowaCell = rows(wrapper)[1]!.find('.school-toggle')
+    const iowaCell = rows(wrapper)[1]!.find('button.school-toggle')
+    expect(iowaCell.element.tagName).toBe('BUTTON')
 
     await iowaCell.trigger('click')
     await settle(wrapper)

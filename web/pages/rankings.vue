@@ -3,6 +3,7 @@ import type { RankingsOverview } from '~/types/rankings'
 import { movement } from '~/utils/movement'
 import { WEIGHT_CLASSES } from '~/utils/weights'
 import { SOURCES, DEFAULT_SOURCE } from '~/utils/sources'
+import { splitName } from '~/utils/names'
 
 const route = useRoute()
 const sourceSlug = computed(() => {
@@ -118,6 +119,12 @@ function arrow(key: SortKey) {
   return sortAsc.value ? ' ↑' : ' ↓'
 }
 
+// aria-sort lives on the <th> itself (WAI-ARIA), not the button inside it.
+function ariaSort(key: SortKey): 'ascending' | 'descending' | 'none' {
+  if (sortKey.value !== key) return 'none'
+  return sortAsc.value ? 'ascending' : 'descending'
+}
+
 const seasonLabel = computed(() =>
   data.value ? `${data.value.season - 1}-${String(data.value.season).slice(2)}` : '',
 )
@@ -172,28 +179,49 @@ useSeoMeta({
     </div>
 
     <div class="board">
-      <table>
-        <thead>
-          <tr>
-            <th class="num sortable" @click="sortBy('weight')">WT{{ arrow('weight') }}</th>
-            <th class="num sortable" @click="sortBy('rank')">RK{{ arrow('rank') }}</th>
-            <th class="sortable" @click="sortBy('name')">Wrestler{{ arrow('name') }}</th>
-            <th class="sortable" @click="sortBy('school')">School{{ arrow('school') }}</th>
-            <th>YR</th>
-            <th class="num sortable" @click="sortBy('delta')">Move{{ arrow('delta') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="row in rows" :key="`${row.weight}-${row.rank}-${row.name}`">
-            <td class="num weight"><NuxtLink :to="`/${row.weight}`">{{ row.weight }}</NuxtLink></td>
-            <td class="num rank">{{ row.rank }}</td>
-            <td class="name">{{ row.name }}</td>
-            <td class="school">{{ row.school }}</td>
-            <td class="grade">{{ row.grade }}</td>
-            <td class="num"><MovementBadge :rank="row.rank" :prev-rank="row.prevRank" :prev-weight="row.prevWeight" /></td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th class="num sticky col-weight" :aria-sort="ariaSort('weight')">
+                <button type="button" @click="sortBy('weight')">WT{{ arrow('weight') }}</button>
+              </th>
+              <th class="num sticky col-rank" :aria-sort="ariaSort('rank')">
+                <button type="button" @click="sortBy('rank')">RK{{ arrow('rank') }}</button>
+              </th>
+              <th class="sticky col-name" :aria-sort="ariaSort('name')">
+                <button type="button" @click="sortBy('name')">Wrestler{{ arrow('name') }}</button>
+              </th>
+              <th :aria-sort="ariaSort('school')">
+                <button type="button" @click="sortBy('school')">School{{ arrow('school') }}</button>
+              </th>
+              <th>YR</th>
+              <th class="num" :aria-sort="ariaSort('delta')">
+                <button type="button" @click="sortBy('delta')">Move{{ arrow('delta') }}</button>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in rows" :key="`${row.weight}-${row.rank}-${row.name}`">
+              <td class="num weight sticky col-weight"><NuxtLink :to="`/${row.weight}`">{{ row.weight }}</NuxtLink></td>
+              <td class="num rank sticky col-rank">{{ row.rank }}</td>
+              <!-- ".last" prepends the space inside the expression itself
+                   (not template whitespace before the mustache — Vue's
+                   compiler trims that at an element's edge) so text content
+                   reads "First Last", not "FirstLast". Harmless for the
+                   block-stacked visual layout: whitespace between block
+                   elements has no layout effect. -->
+              <td class="name sticky col-name">
+                <span class="first">{{ splitName(row.name).first }}</span>
+                <span v-if="splitName(row.name).last" class="last">{{ ' ' + splitName(row.name).last }}</span>
+              </td>
+              <td class="school">{{ row.school }}</td>
+              <td class="grade">{{ row.grade }}</td>
+              <td class="num"><MovementBadge :rank="row.rank" :prev-rank="row.prevRank" :prev-weight="row.prevWeight" /></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
   <div v-else-if="notYetPublished">
@@ -228,5 +256,42 @@ useSeoMeta({
 <style scoped>
 .controls input[type='search'] {
   min-width: 14rem;
+}
+
+/* Sticky column offsets for this page's table (WT + RK + Wrestler — weight
+   class is essential context on the all-weights view specifically) — see
+   main.css .board td.sticky/.board th.sticky for the shared mechanism. */
+.col-weight {
+  left: 0;
+  width: 3rem;
+}
+
+.col-rank {
+  left: 3rem;
+  width: 3rem;
+}
+
+/* table-layout:auto sizes a column to its widest cell — a sticky cell
+   without its own bound drags that FULL natural width along when pinned,
+   which visually overlaps the columns after it. Bound it; first/last name
+   render as two stacked lines (below) instead of one truncated line. */
+.col-name {
+  left: 6rem;
+  width: 7rem;
+  max-width: 7rem;
+  box-shadow: 2px 0 4px -2px rgb(0 0 0 / 25%);
+}
+
+.col-name .first,
+.col-name .last {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.col-name .last {
+  color: var(--muted);
+  font-weight: 500;
 }
 </style>
