@@ -64,6 +64,24 @@ roughly doubles v1 vs the launch set alone — accepted explicitly.)_
    October. With a second source published live, ops IS the product being
    live; "a late start backfills" holds for data completeness, not for a
    stranger landing mid-season.
+   **Resolved in part (2026-09-20):** scheduling itself is live —
+   `.github/workflows/scrape.yml` runs both `cmd/scrape` (FloWrestling) and
+   `cmd/scrape-intermat` daily via GitHub Actions, not Pi cron. The "Pi
+   cron"/"Pi deploy" framing above predates the 2026-07-27 move off the Pi
+   (see Stack below); no PaaS has been picked yet either, so Actions — which
+   needs nothing provisioned — is the interim answer until a real deploy
+   target exists. Daily, not weekly: `IngestEdition` is idempotent per
+   `(source, weight, season, published_date)`, so extra runs are free, and
+   InterMat's actual publish day already drifts (docs/sources/intermat.md).
+   Each scraper's failure surfaces independently (both always run; the job
+   fails if either does) via GitHub's built-in email-on-failure — the
+   `ingest.Result.Anomalies` signal itself isn't surfaced anywhere new yet,
+   it just rides along in the run's log output. Until `DATABASE_URL` points
+   at a real database, every run fails on purpose — there is no production
+   DB yet. Still open: new-season Flo container discovery (the workflow's
+   `FLO_RANKINGS_URL` repo variable is this season's container URL, hardcoded
+   same as before, just relocated) and a real failure notification beyond
+   GitHub's default email.
    **Flo rolled over (2026-09-24):** confirmed live — Flo's 2026-27
    container is a new id (16146571, was 14300895), exactly the undiscovered
    "new-season container" case named above. Manually re-pointed for now.
