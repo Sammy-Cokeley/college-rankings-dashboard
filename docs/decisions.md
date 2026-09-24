@@ -26,6 +26,16 @@ roughly doubles v1 vs the launch set alone — accepted explicitly.)_
 2. Minimal .vue component test harness (enabler for the template-heavy work;
    `[weight].vue` fold/selection logic is untested)
 3. Mobile pass, with keyboard a11y (sortable headers, row toggles) folded in
+   **Resolved (2026-09-24):** tables wrap in a horizontally-scrollable
+   container with identity columns (RK/Wrestler, +WT on the all-weights
+   page) pinned via `position: sticky`. Row/school toggles and rankings.vue's
+   sort headers — all @click on non-interactive tr/td/th — became real
+   `<button>`s, free keyboard access with no custom `@keydown` code.
+   `aria-sort`/`aria-pressed`/`aria-expanded` added to reflect state. Not
+   done: the trajectory chart's click-to-pin lines have no keyboard path
+   either (same underlying `toggleWrestler`, but SVG lines need a different
+   pattern — roving tabindex — deliberately left as a follow-up, not
+   named in the original roadmap item).
 4. Cross-weight movement annotation (see Movement display below)
 5. InterMat scraper + resolution; backfill 2025-26 articles as the fixed
    validation corpus, mirroring the Flo approach (see Sources below)
