@@ -83,6 +83,12 @@ func headerIndex(header []string) (map[string]int, error) {
 		if key == "" {
 			continue
 		}
+		// Flo renamed this column "Year" starting the 2026-27 season
+		// container (still the same eligibility-year field "SO"/"JR"/etc.,
+		// docs/sources/flowrestling.md) — accept either label.
+		if key == "year" {
+			key = colGrade
+		}
 		if _, dup := index[key]; dup {
 			return nil, fmt.Errorf("duplicate header column %q in header %v", label, header)
 		}
