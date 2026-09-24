@@ -3,6 +3,22 @@ import type { RankingsOverview, SeasonSeries } from '~/types/rankings'
 import { WEIGHT_CLASSES } from '~/utils/weights'
 import { movement } from '~/utils/movement'
 import { chartScales, seriesSegments, polylinePoints, type ChartBox } from '~/utils/chart'
+import { SOURCES, DEFAULT_SOURCE } from '~/utils/sources'
+
+const route = useRoute()
+
+// Movers is the only section that's source-aware — same ?source= tab
+// pattern as rankings.vue/[weight].vue, so switching here is consistent
+// with switching anywhere else on the site.
+const sourceSlug = computed(() => {
+  const raw = route.query.source
+  const slug = typeof raw === 'string' ? raw : DEFAULT_SOURCE.slug
+  return SOURCES.some((s) => s.slug === slug) ? slug : DEFAULT_SOURCE.slug
+})
+
+function switchSource(slug: string) {
+  navigateTo({ query: slug === DEFAULT_SOURCE.slug ? {} : { source: slug } })
+}
 
 // Non-essential fetches: the hero (headline, subhead, weight CTAs) is the
 // point of this page and must never wait on — or break because of — either
@@ -11,9 +27,13 @@ import { chartScales, seriesSegments, polylinePoints, type ChartBox } from '~/ut
 // async setup doesn't wait on either request, so the hero paints
 // immediately and these sections fill in reactively once data lands. No
 // error is ever rethrown, only used to hide the section it feeds.
-const { data: overview } = useFetch<RankingsOverview>('/api/rankings?source=flowrestling', {
+const overviewUrl = computed(() => `/api/rankings?source=${sourceSlug.value}`)
+const { data: overview } = useFetch<RankingsOverview>(overviewUrl, {
   lazy: true,
 })
+// The hero's background chart is decorative texture, not information — kept
+// on FloWrestling/125 (the richest historical series) regardless of the
+// movers tab; not worth making reactive for something nobody reads literally.
 const { data: heroSeries } = useFetch<SeasonSeries>('/api/rankings/125/series?source=flowrestling', {
   lazy: true,
 })
@@ -70,7 +90,7 @@ const poly = (seg: { week: number; rank: number }[]) => polylinePoints(seg, hero
 useSeoMeta({
   title: 'NCAA DI Wrestling Rankings',
   description:
-    'Rank the wrestlers you know at any weight class — top 10 or deeper, up to 33 — then compare your ballot against FloWrestling and the Fan Poll, updated every week.',
+    'Rank the wrestlers you know at any weight class — top 10 or deeper, up to 33 — then compare your ballot against FloWrestling, InterMat, and the Fan Poll, updated every week.',
   ogTitle: 'NCAA DI Wrestling Rankings',
   ogDescription: 'Rank the room. Compare with everyone else’s.',
   ogType: 'website',
@@ -103,7 +123,7 @@ useSeoMeta({
         <h1>Rank the room.<br>Compare with everyone else&rsquo;s.</h1>
         <p class="subhead">
           Rank the wrestlers you know at any weight class — a top 10 is a solid ballot, go
-          deeper if you want — then see how it stacks up against FloWrestling and the crowd.
+          deeper if you want — then see how it stacks up against FloWrestling, InterMat, and the crowd.
         </p>
 
         <div class="cta">
@@ -119,6 +139,18 @@ useSeoMeta({
 
     <section class="movers board">
       <h2>Biggest movers this week</h2>
+      <nav class="source-tabs" aria-label="Ranking source">
+        <button
+          v-for="s in SOURCES"
+          :key="s.slug"
+          type="button"
+          :class="{ active: s.slug === sourceSlug }"
+          :aria-current="s.slug === sourceSlug ? 'true' : undefined"
+          @click="switchSource(s.slug)"
+        >
+          {{ s.name }}
+        </button>
+      </nav>
       <ol v-if="movers.length" class="movers-list">
         <li v-for="m in movers" :key="`${m.weight}-${m.rank}-${m.name}`">
           <NuxtLink :to="`/${m.weight}`" class="movers-row">
@@ -146,7 +178,7 @@ useSeoMeta({
         </li>
         <li>
           <span class="step-label">Compare</span>
-          <p>See the Fan Poll next to FloWrestling, side by side, every week.</p>
+          <p>See the Fan Poll next to FloWrestling and InterMat, side by side, every week.</p>
         </li>
       </ol>
     </section>
@@ -280,6 +312,10 @@ useSeoMeta({
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--muted);
+}
+
+.movers .source-tabs {
+  margin-bottom: 1rem;
 }
 
 .movers-list {
