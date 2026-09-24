@@ -36,6 +36,23 @@ func TestParseTable_FiveColumns(t *testing.T) {
 	}
 }
 
+const yearHeaderTable = `<table border=""><tbody>
+<tr><td>Rank</td><td>Name</td><td>School</td><td>Year</td></tr>
+<tr><td>1</td><td>Luke Lilledahl</td><td>Penn State</td><td>JR</td></tr>
+</tbody></table>`
+
+// Flo's 2026-27 container renamed the Grade column to "Year" (same field).
+func TestParseTable_YearHeaderAliasesGrade(t *testing.T) {
+	rows, err := ParseTable(yearHeaderTable)
+	if err != nil {
+		t.Fatalf("ParseTable: %v", err)
+	}
+	want := Row{Rank: 1, Grade: "JR", Name: "Luke Lilledahl", School: "Penn State"}
+	if rows[0] != want {
+		t.Errorf("row 0 = %+v, want %+v", rows[0], want)
+	}
+}
+
 func TestParseTable_FourColumns_NoPrevious(t *testing.T) {
 	rows, err := ParseTable(fourColTable)
 	if err != nil {

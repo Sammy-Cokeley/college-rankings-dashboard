@@ -82,6 +82,16 @@ roughly doubles v1 vs the launch set alone — accepted explicitly.)_
    `FLO_RANKINGS_URL` repo variable is this season's container URL, hardcoded
    same as before, just relocated) and a real failure notification beyond
    GitHub's default email.
+   **Flo rolled over (2026-09-24):** confirmed live — Flo's 2026-27
+   container is a new id (16146571, was 14300895), exactly the undiscovered
+   "new-season container" case named above. Manually re-pointed for now.
+   Surfaced a real parser bug at the same time: the new container's table
+   header renamed the eligibility-year column from "Grade" to "Year" (same
+   field, values also reformatted "JR" → "3rd"); `headerIndex`
+   (`pipeline/internal/scraper/table.go`) now aliases "year" to the same
+   required column rather than failing every edition. Both seasons now
+   coexist in the DB (2026 and 2027) — see the archive note under Data
+   retention below for what that means for the older season's reachability.
  
 **NOT in v1** (explicit cuts, not oversights):
 - Conference filter on the bump chart — coupled to the curated
@@ -229,6 +239,23 @@ roughly doubles v1 vs the launch set alone — accepted explicitly.)_
   criteria, not blockers: unresolved entries have no identity to follow;
   per-source only; "current weight" is ambiguous in the week both weights'
   lists include the wrestler (editions publish on different dates).
+
+## Data retention
+
+- **Nothing is deleted; only the UI is season-scoped.** _(noted 2026-09-24,
+  once Flo's 2026-27 rollover made it concrete rather than hypothetical.)_
+  `IngestEdition` only ever inserts — every past season's snapshots stay in
+  Postgres forever, keyed by `season`. But every rankings route
+  (`server/api/rankings/*`) calls `getSeason()`, which hardcodes
+  `MAX(season)` per source with no override — so the instant a source rolls
+  to a new season, the previous one becomes completely unreachable through
+  the UI, even though it's fully intact in the DB.
+  - **Not building a season archive yet.** Real scope (a season selector,
+    `getSeason` taking an optional override, a URL shape decision for old
+    seasons) and, as of the 2026-09-24 rollover, nothing is actually stale:
+    Flo just started 2026-27 and InterMat is one edition into the same
+    season. The trigger for building this is a *second* rollover, once
+    "last season" is real archive material rather than last week's data.
 ## Web UI
  
 - **The "All Weights" dashboard is NOT the intended home page.** _(noted
