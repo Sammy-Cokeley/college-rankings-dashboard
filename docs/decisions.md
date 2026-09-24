@@ -67,6 +67,7 @@ roughly doubles v1 vs the launch set alone — accepted explicitly.)_
    overview intentionally keeps its existing compact column set rather than
    growing per-source columns there too.
 7. Real home page (after multi-source, so it can show both sources)
+   **Resolved (2026-09-24)** — see the Web UI section below.
 8. Register ranklines.com; rename + og:image/share meta (see Web UI below)
 9. In-season ops: Pi cron, new-season Flo container discovery, weekly InterMat
    article discovery, minimal failure/anomaly notification (surface the
@@ -276,6 +277,15 @@ roughly doubles v1 vs the launch set alone — accepted explicitly.)_
   2026-07-04)_, sequenced after the multi-source display so it can show both
   sources. Keep the all-weights table reachable when that lands; don't grow
   features into it in the meantime on the assumption it stays the home page.
+  **Resolved (2026-09-24):** actually shipped earlier than this note was
+  updated — `web/pages/index.vue` landed with the Fan Poll feature (commit
+  `1fa2966`, "...a real landing page"): hero with a ballot-building CTA per
+  weight class, "Biggest movers this week," and an explainer. Its copy and
+  movers predated InterMat going live, so this pass brought it current: the
+  movers section now has the same `SOURCES`/`?source=` tabs as
+  `rankings.vue`/`[weight].vue` (previously FloWrestling-only), and the
+  hero/explainer copy names all three sources. The all-weights table stays
+  reachable via "See full rankings" and the topbar, per the original note.
 - **Site name: Ranklines (ranklines.com).** _(decided 2026-07-04.)_ Chosen in
   the v1 scoping session from a DNS-checked shortlist (no A record on
   2026-07-04; verify + register at a registrar before the rename/og work —
