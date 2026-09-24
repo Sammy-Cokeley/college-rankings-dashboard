@@ -3,6 +3,7 @@ import type { RankingsOverview } from '~/types/rankings'
 import { movement } from '~/utils/movement'
 import { WEIGHT_CLASSES } from '~/utils/weights'
 import { SOURCES, DEFAULT_SOURCE } from '~/utils/sources'
+import { splitName } from '~/utils/names'
 
 const route = useRoute()
 const sourceSlug = computed(() => {
@@ -204,7 +205,16 @@ useSeoMeta({
             <tr v-for="row in rows" :key="`${row.weight}-${row.rank}-${row.name}`">
               <td class="num weight sticky col-weight"><NuxtLink :to="`/${row.weight}`">{{ row.weight }}</NuxtLink></td>
               <td class="num rank sticky col-rank">{{ row.rank }}</td>
-              <td class="name sticky col-name">{{ row.name }}</td>
+              <!-- ".last" prepends the space inside the expression itself
+                   (not template whitespace before the mustache — Vue's
+                   compiler trims that at an element's edge) so text content
+                   reads "First Last", not "FirstLast". Harmless for the
+                   block-stacked visual layout: whitespace between block
+                   elements has no layout effect. -->
+              <td class="name sticky col-name">
+                <span class="first">{{ splitName(row.name).first }}</span>
+                <span v-if="splitName(row.name).last" class="last">{{ ' ' + splitName(row.name).last }}</span>
+              </td>
               <td class="school">{{ row.school }}</td>
               <td class="grade">{{ row.grade }}</td>
               <td class="num"><MovementBadge :rank="row.rank" :prev-rank="row.prevRank" :prev-weight="row.prevWeight" /></td>
@@ -263,14 +273,25 @@ useSeoMeta({
 
 /* table-layout:auto sizes a column to its widest cell — a sticky cell
    without its own bound drags that FULL natural width along when pinned,
-   which visually overlaps the columns after it. Bound it and truncate
-   instead — the standard fix for a frozen table column. */
+   which visually overlaps the columns after it. Bound it; first/last name
+   render as two stacked lines (below) instead of one truncated line. */
 .col-name {
   left: 6rem;
-  width: 9rem;
-  max-width: 9rem;
+  width: 7rem;
+  max-width: 7rem;
+  box-shadow: 2px 0 4px -2px rgb(0 0 0 / 25%);
+}
+
+.col-name .first,
+.col-name .last {
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
-  box-shadow: 2px 0 4px -2px rgb(0 0 0 / 25%);
+  white-space: nowrap;
+}
+
+.col-name .last {
+  color: var(--muted);
+  font-weight: 500;
 }
 </style>

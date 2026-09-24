@@ -2,6 +2,7 @@
 import type { SeasonSeries, WeightRankings } from '~/types/rankings'
 import { isWeightClass } from '~/utils/weights'
 import { SOURCES, DEFAULT_SOURCE } from '~/utils/sources'
+import { splitName } from '~/utils/names'
 
 definePageMeta({
   validate: (route) => isWeightClass(Number(route.params.weight)),
@@ -261,6 +262,12 @@ useSeoMeta({
               @click="toggleWrestler(row.wrestlerId)"
             >
               <td class="num rank sticky col-rank" :class="{ top: row.rank <= 3 }">{{ row.rank }}</td>
+              <!-- ".last" prepends the space inside the expression itself
+                   (not template whitespace before the mustache — Vue's
+                   compiler trims that at an element's edge) so accessible
+                   name / text content reads "First Last", not "FirstLast".
+                   Harmless for the block-stacked visual layout: whitespace
+                   between block elements has no layout effect. -->
               <td class="name sticky col-name">
                 <button
                   v-if="row.wrestlerId !== null"
@@ -268,8 +275,14 @@ useSeoMeta({
                   class="row-toggle"
                   :aria-pressed="rowSelectionIndex(row.wrestlerId) >= 0"
                   @click.stop="toggleWrestler(row.wrestlerId)"
-                >{{ row.name }}</button>
-                <span v-else>{{ row.name }}</span>
+                >
+                  <span class="first">{{ splitName(row.name).first }}</span>
+                  <span v-if="splitName(row.name).last" class="last">{{ ' ' + splitName(row.name).last }}</span>
+                </button>
+                <span v-else>
+                  <span class="first">{{ splitName(row.name).first }}</span>
+                  <span v-if="splitName(row.name).last" class="last">{{ ' ' + splitName(row.name).last }}</span>
+                </span>
               </td>
               <td class="school">
                 <button
@@ -358,20 +371,27 @@ useSeoMeta({
 /* table-layout:auto sizes a column to its widest cell — a sticky cell
    without its own bound drags that FULL natural width along when pinned,
    which visually overlaps the columns after it (the browser doesn't
-   re-flow siblings around a sticky element's offset). Bound it and
-   truncate instead — the standard fix for a frozen table column. */
+   re-flow siblings around a sticky element's offset). Bound it; first/last
+   name render as two stacked lines (below) instead of one truncated line,
+   so only an unusually long single name part ever needs the ellipsis
+   fallback. */
 .col-name {
   left: 3rem;
-  width: 9rem;
-  max-width: 9rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  width: 7rem;
+  max-width: 7rem;
   box-shadow: 2px 0 4px -2px rgb(0 0 0 / 25%);
 }
 
-.col-name button,
-.col-name span {
+.col-name .first,
+.col-name .last {
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.col-name .last {
+  color: var(--muted);
+  font-weight: 500;
 }
 </style>
