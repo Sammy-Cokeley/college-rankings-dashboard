@@ -40,6 +40,7 @@ export function weightRankings(weight: number, entries: RankingRow[]): WeightRan
       season: 2026,
       date: editionDates[editionDates.length - 1]!.date,
       week: editionDates.length,
+      url: null,
       entries,
     },
     dates: editionDates,

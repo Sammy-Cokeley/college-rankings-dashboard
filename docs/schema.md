@@ -53,6 +53,7 @@ CREATE TABLE snapshots (
   season         INTEGER NOT NULL,     -- ending year, e.g. 2026
   published_date DATE NOT NULL,        -- canonical time spine
   captured_at    TIMESTAMP NOT NULL,   -- when we scraped it
+  source_url     TEXT,                 -- the exact page this was scraped from, when known (db/migrations/0007); null for Fan Poll and pre-0007 data
   UNIQUE (source_id, weight_class, season, published_date)
 );
  

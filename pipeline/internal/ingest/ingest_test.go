@@ -75,6 +75,21 @@ func TestContainer_IngestsFixture(t *testing.T) {
 		`SELECT COUNT(*) FROM snapshots WHERE published_date = '2025-06-19'`); got != 2 {
 		t.Errorf("preseason snapshots = %d, want 2 (one per weight)", got)
 	}
+
+	// source_url is constructed from the container/edition IDs already in the
+	// fixture (container 14300895, that weight's first edition 54217) — no
+	// new scraping needed, confirmed live that Flo's routing only reads the
+	// leading numeric IDs (see ingest.go's ingestOne comment).
+	var sourceURL sql.NullString
+	if err := db.QueryRow(
+		`SELECT source_url FROM snapshots WHERE published_date = '2025-06-19' AND weight_class = 125`,
+	).Scan(&sourceURL); err != nil {
+		t.Fatalf("query source_url: %v", err)
+	}
+	want := "https://www.flowrestling.org/rankings/14300895-rankings/54217-edition"
+	if !sourceURL.Valid || sourceURL.String != want {
+		t.Errorf("source_url = %+v, want %q", sourceURL, want)
+	}
 }
 
 func TestContainer_Idempotent(t *testing.T) {

@@ -1,7 +1,7 @@
 import type { Edition, RankingsOverview } from '../../../types/rankings'
 import { WEIGHT_CLASSES } from '../../../utils/weights'
 import { useDb } from '../../utils/db'
-import { editionEntries, getSeason, getSourceId, listDates } from '../../utils/queries'
+import { editionEntries, getEditionUrl, getSeason, getSourceId, listDates } from '../../utils/queries'
 import { resolveSource } from '../../utils/source'
 
 // GET /api/rankings?source=<slug> — the dashboard payload: the latest edition
@@ -30,6 +30,7 @@ export default defineEventHandler(async (event): Promise<RankingsOverview> => {
       season,
       date: latest.date,
       week: latest.week,
+      url: await getEditionUrl(db, sourceId, weight, season, latest.date),
       entries: await editionEntries(db, sourceId, weight, season, latest.date),
     })
   }

@@ -9,7 +9,7 @@ let overviewHandler: (event: H3Event) => unknown
 registerEndpoint('/api/rankings', (event) => overviewHandler(event))
 
 function weightEdition(weight: number, entries: ReturnType<typeof rankingRow>[]) {
-  return { weight, season: 2026, date: '2026-01-15', week: 3, entries }
+  return { weight, season: 2026, date: '2026-01-15', week: 3, url: null, entries }
 }
 
 async function settle(wrapper: VueWrapper<unknown>) {

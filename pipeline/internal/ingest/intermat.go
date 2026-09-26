@@ -23,8 +23,11 @@ const intermatSourceName = "InterMat"
 // capturedAt is stamped on each newly created snapshot. rec.PublishedDate is
 // shared by every weight (an InterMat record is one point-in-time edition
 // covering all weights, unlike Flo's Container which bundles many dated
-// editions per weight — docs/sources/intermat.md).
-func IntermatRecord(ctx context.Context, db *sql.DB, rec intermat.Record, season int, capturedAt time.Time) (Result, error) {
+// editions per weight — docs/sources/intermat.md). sourceURL is likewise
+// shared by every weight — the exact record page this came from, as known
+// by the caller (live fetch, Wayback backfill, or manual recovery); empty
+// when genuinely unknown (a local-file recovery with no live URL left).
+func IntermatRecord(ctx context.Context, db *sql.DB, rec intermat.Record, season int, capturedAt time.Time, sourceURL string) (Result, error) {
 	sourceID, err := store.SourceID(ctx, db, intermatSourceName)
 	if err != nil {
 		return Result{}, err
@@ -33,7 +36,7 @@ func IntermatRecord(ctx context.Context, db *sql.DB, rec intermat.Record, season
 
 	var res Result
 	for _, wt := range rec.Weights {
-		if err := ingestIntermatWeight(ctx, db, sourceID, rec.PublishedDate, wt, season, captured, &res); err != nil {
+		if err := ingestIntermatWeight(ctx, db, sourceID, rec.PublishedDate, sourceURL, wt, season, captured, &res); err != nil {
 			res.Failures = append(res.Failures, EditionFailure{
 				WeightClass:   wt.WeightClass,
 				PublishedDate: rec.PublishedDate,
@@ -46,7 +49,7 @@ func IntermatRecord(ctx context.Context, db *sql.DB, rec intermat.Record, season
 
 // ingestIntermatWeight parses and ingests a single weight's raw table,
 // updating res on success.
-func ingestIntermatWeight(ctx context.Context, db *sql.DB, sourceID int64, publishedDate string, wt intermat.RawWeightTable, season int, captured string, res *Result) error {
+func ingestIntermatWeight(ctx context.Context, db *sql.DB, sourceID int64, publishedDate, sourceURL string, wt intermat.RawWeightTable, season int, captured string, res *Result) error {
 	rows, err := intermat.ParseRows(wt.Rows)
 	if err != nil {
 		return fmt.Errorf("parse table: %w", err)
@@ -68,6 +71,7 @@ func ingestIntermatWeight(ctx context.Context, db *sql.DB, sourceID int64, publi
 		Season:        season,
 		PublishedDate: publishedDate,
 		CapturedAt:    captured,
+		SourceURL:     optional(sourceURL),
 	}
 	entries := toIntermatEntries(rows)
 

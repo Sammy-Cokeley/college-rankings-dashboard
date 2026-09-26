@@ -67,6 +67,13 @@ const tied = [
 registerEndpoint('/api/rankings/133', () => weightRankings(133, tied))
 registerEndpoint('/api/rankings/133/series', () => seasonSeries(133, tied))
 
+// Attribution-link fallback: edition.url set vs. not (weightRankings' own
+// sourceUrl default is 'https://www.flowrestling.org' — see fixtures).
+const withEditionUrl = weightRankings(141, [rankingRow(1)])
+withEditionUrl.edition.url = 'https://www.flowrestling.org/rankings/1-r/2-e'
+registerEndpoint('/api/rankings/141', () => withEditionUrl)
+registerEndpoint('/api/rankings/141/series', () => seasonSeries(141, [rankingRow(1)]))
+
 async function settle(wrapper: VueWrapper<unknown>) {
   await flushPromises()
   await wrapper.vm.$nextTick()
@@ -176,5 +183,23 @@ describe('[weight].vue selection', () => {
     const wrapper = await mountSuspended(WeightPage)
     expect(selectedRows(wrapper)).toHaveLength(0)
     expect(foldedRows(wrapper)).toHaveLength(4)
+  })
+})
+
+describe('[weight].vue attribution link', () => {
+  it('prefers the edition-specific URL over the source homepage when the pipeline recorded one', async () => {
+    setRoute(141)
+    const wrapper = await mountSuspended(WeightPage)
+    await settle(wrapper)
+    expect(wrapper.find('.source-link').attributes('href')).toBe(
+      'https://www.flowrestling.org/rankings/1-r/2-e',
+    )
+  })
+
+  it('falls back to the source homepage when the edition has no recorded URL', async () => {
+    setRoute(125) // fixtures/rankings.ts's weightRankings() defaults edition.url to null
+    const wrapper = await mountSuspended(WeightPage)
+    await settle(wrapper)
+    expect(wrapper.find('.source-link').attributes('href')).toBe('https://www.flowrestling.org')
   })
 })

@@ -104,7 +104,11 @@ func run(dbURL string, season int, delay time.Duration) error {
 			continue
 		}
 
-		res, err := fetchParseIngest(ctx, db, client, intermat.SnapshotURL(snap), publishedDate, season)
+		// Fetch via the Wayback replay URL, but attribute to the real,
+		// original intermatwrestle.com URL (snap.OriginalURL) — those two
+		// differ for every backfilled edition; readers should land on the
+		// live site, not an archive.org mirror.
+		res, err := fetchParseIngest(ctx, db, client, intermat.SnapshotURL(snap), snap.OriginalURL, publishedDate, season)
 		if err != nil {
 			failures = append(failures, fmt.Sprintf("%s: %v", snap.OriginalURL, err))
 			continue
@@ -142,7 +146,7 @@ func runRecover(dbURL string, season int, url, publishedDate string) error {
 	client := &http.Client{Timeout: 30 * time.Second}
 
 	log.Printf("recovering %s as published_date=%s (operator-supplied, not derived)", url, publishedDate)
-	res, err := fetchParseIngest(ctx, db, client, url, publishedDate, season)
+	res, err := fetchParseIngest(ctx, db, client, url, url, publishedDate, season)
 	if err != nil {
 		return fmt.Errorf("%s: %w", url, err)
 	}
@@ -173,7 +177,10 @@ func runRecoverFile(dbURL string, season int, path, publishedDate string) error 
 	}
 
 	log.Printf("recovering %s (local file) as published_date=%s (operator-supplied, not derived)", path, publishedDate)
-	res, err := parseAndIngest(ctx, db, page, publishedDate, season)
+	// No live URL exists for a page recovered from a local file — the whole
+	// point of this path is that it's no longer fetchable anywhere. Empty,
+	// not a guess: ingest.IntermatRecord/optional() turns "" into NULL.
+	res, err := parseAndIngest(ctx, db, page, "", publishedDate, season)
 	if err != nil {
 		return fmt.Errorf("%s: %w", path, err)
 	}
@@ -185,27 +192,31 @@ func runRecoverFile(dbURL string, season int, path, publishedDate string) error 
 	return nil
 }
 
-// fetchParseIngest fetches one record page over HTTP, then parses and
-// ingests it — the single-record unit both run and runRecover repeat.
-func fetchParseIngest(ctx context.Context, db *sql.DB, client *http.Client, url, publishedDate string, season int) (ingest.Result, error) {
-	page, err := fetch(ctx, client, url)
+// fetchParseIngest fetches one record page over HTTP (from fetchURL), then
+// parses and ingests it, attributed to sourceURL — the single-record unit
+// both run and runRecover repeat. fetchURL and sourceURL differ for a
+// Wayback-backfilled edition (replay URL vs. the real original page) and
+// are identical for a direct recovery fetch.
+func fetchParseIngest(ctx context.Context, db *sql.DB, client *http.Client, fetchURL, sourceURL, publishedDate string, season int) (ingest.Result, error) {
+	page, err := fetch(ctx, client, fetchURL)
 	if err != nil {
 		return ingest.Result{}, fmt.Errorf("fetch: %w", err)
 	}
-	return parseAndIngest(ctx, db, page, publishedDate, season)
+	return parseAndIngest(ctx, db, page, sourceURL, publishedDate, season)
 }
 
 // parseAndIngest is the fetch-source-agnostic core shared by the live-fetch
 // and local-file recovery paths — parsing itself never cared whether the
 // bytes came from Wayback, a live fetch, or disk (intermat.ParseRecord's own
-// design goal).
-func parseAndIngest(ctx context.Context, db *sql.DB, page []byte, publishedDate string, season int) (ingest.Result, error) {
+// design goal). sourceURL is the attribution link, empty when genuinely
+// unknown (a local-file recovery with no live URL left).
+func parseAndIngest(ctx context.Context, db *sql.DB, page []byte, sourceURL, publishedDate string, season int) (ingest.Result, error) {
 	weights, err := intermat.ParseRecord(page)
 	if err != nil {
 		return ingest.Result{}, fmt.Errorf("parse: %w", err)
 	}
 	rec := intermat.Record{PublishedDate: publishedDate, Weights: weights}
-	res, err := ingest.IntermatRecord(ctx, db, rec, season, time.Now())
+	res, err := ingest.IntermatRecord(ctx, db, rec, season, time.Now(), sourceURL)
 	if err != nil {
 		return ingest.Result{}, fmt.Errorf("ingest: %w", err)
 	}

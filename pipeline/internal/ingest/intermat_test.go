@@ -36,7 +36,7 @@ func TestIntermatRecord_IngestsFixture(t *testing.T) {
 	db := newDB(t)
 	rec := loadIntermatRecord(t, intermatMidSeasonFixture, "2026-01-06")
 
-	res, err := IntermatRecord(ctx, db, rec, 2026, time.Now())
+	res, err := IntermatRecord(ctx, db, rec, 2026, time.Now(), "https://intermatwrestle.com/rankings.html/ncaa-di-r63/")
 	if err != nil {
 		t.Fatalf("IntermatRecord: %v", err)
 	}
@@ -78,6 +78,14 @@ func TestIntermatRecord_IngestsFixture(t *testing.T) {
 	if record != "9-1" {
 		t.Errorf("raw_record = %q, want %q", record, "9-1")
 	}
+
+	var sourceURL sql.NullString
+	if err := db.QueryRow(`SELECT source_url FROM snapshots LIMIT 1`).Scan(&sourceURL); err != nil {
+		t.Fatalf("query source_url: %v", err)
+	}
+	if !sourceURL.Valid || sourceURL.String != "https://intermatwrestle.com/rankings.html/ncaa-di-r63/" {
+		t.Errorf("source_url = %+v, want the record URL passed to IntermatRecord", sourceURL)
+	}
 }
 
 func TestIntermatRecord_Idempotent(t *testing.T) {
@@ -85,10 +93,10 @@ func TestIntermatRecord_Idempotent(t *testing.T) {
 	db := newDB(t)
 	rec := loadIntermatRecord(t, intermatMidSeasonFixture, "2026-01-06")
 
-	if _, err := IntermatRecord(ctx, db, rec, 2026, time.Now()); err != nil {
+	if _, err := IntermatRecord(ctx, db, rec, 2026, time.Now(), ""); err != nil {
 		t.Fatalf("first ingest: %v", err)
 	}
-	res2, err := IntermatRecord(ctx, db, rec, 2026, time.Now())
+	res2, err := IntermatRecord(ctx, db, rec, 2026, time.Now(), "")
 	if err != nil {
 		t.Fatalf("second ingest: %v", err)
 	}
@@ -113,7 +121,7 @@ func TestIntermatRecord_IsolatesBadWeight(t *testing.T) {
 	db := newDB(t)
 	rec := loadIntermatRecord(t, intermatPreseasonFixture, "2025-09-05")
 
-	res, err := IntermatRecord(ctx, db, rec, 2026, time.Now())
+	res, err := IntermatRecord(ctx, db, rec, 2026, time.Now(), "")
 	if err != nil {
 		t.Fatalf("IntermatRecord should not hard-error on a per-weight failure: %v", err)
 	}

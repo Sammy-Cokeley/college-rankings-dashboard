@@ -29,7 +29,7 @@ func ingestIntermatFixture(t *testing.T, db *sql.DB) {
 		t.Fatalf("ParseRecord: %v", err)
 	}
 	rec := intermat.Record{PublishedDate: "2026-01-06", Weights: weights}
-	if _, err := ingest.IntermatRecord(context.Background(), db, rec, 2026, time.Now()); err != nil {
+	if _, err := ingest.IntermatRecord(context.Background(), db, rec, 2026, time.Now(), ""); err != nil {
 		t.Fatalf("IntermatRecord: %v", err)
 	}
 }

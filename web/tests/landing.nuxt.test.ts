@@ -135,5 +135,5 @@ describe('index.vue (landing page)', () => {
 })
 
 function weightEdition(weight: number, entries: ReturnType<typeof rankingRow>[]) {
-  return { weight, season: 2026, date: '2026-01-15', week: 3, entries }
+  return { weight, season: 2026, date: '2026-01-15', week: 3, url: null, entries }
 }

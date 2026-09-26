@@ -68,7 +68,7 @@ func run(dbURL string) error {
 	}
 
 	rec := intermat.Record{PublishedDate: edition.PublishedDate, Weights: weights}
-	res, err := ingest.IntermatRecord(ctx, db, rec, season, time.Now())
+	res, err := ingest.IntermatRecord(ctx, db, rec, season, time.Now(), edition.RecordURL)
 	if err != nil {
 		return fmt.Errorf("ingest: %w", err)
 	}
