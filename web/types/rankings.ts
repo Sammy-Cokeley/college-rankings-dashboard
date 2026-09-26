@@ -56,6 +56,12 @@ export interface Edition {
   date: string
   week: number
   entries: RankingRow[]
+  // The exact page this edition was scraped from (snapshots.source_url),
+  // when the pipeline recorded one — null for Fan Poll (not an external
+  // source) and for data ingested before this column existed. Distinct from
+  // WeightRankings/RankingsOverview's sourceUrl, which is each source's
+  // stable homepage: this is the specific edition's page, when known.
+  url: string | null
 }
 
 export interface WeightRankings {

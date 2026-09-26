@@ -61,7 +61,7 @@ func Container(ctx context.Context, db *sql.DB, c scraper.Container, season int,
 
 	var res Result
 	for _, we := range c.WeightEditions() {
-		if err := ingestOne(ctx, db, sourceID, we, season, captured, &res); err != nil {
+		if err := ingestOne(ctx, db, sourceID, c.ID, we, season, captured, &res); err != nil {
 			res.Failures = append(res.Failures, EditionFailure{
 				WeightClass:   we.WeightClass,
 				PublishedDate: we.Edition.PublishDate,
@@ -73,7 +73,7 @@ func Container(ctx context.Context, db *sql.DB, c scraper.Container, season int,
 }
 
 // ingestOne parses and ingests a single edition, updating res on success.
-func ingestOne(ctx context.Context, db *sql.DB, sourceID int64, we scraper.WeightEdition, season int, captured string, res *Result) error {
+func ingestOne(ctx context.Context, db *sql.DB, sourceID, containerID int64, we scraper.WeightEdition, season int, captured string, res *Result) error {
 	rows, err := scraper.ParseTable(we.Edition.Content)
 	if err != nil {
 		return fmt.Errorf("parse table: %w", err)
@@ -89,12 +89,18 @@ func ingestOne(ctx context.Context, db *sql.DB, sourceID int64, we scraper.Weigh
 		})
 	}
 
+	// Flo's route only reads the leading numeric container/edition IDs — the
+	// trailing SEO slug is cosmetic (confirmed live: an arbitrary slug still
+	// resolves 200), so a working per-edition URL is constructible from data
+	// already parsed, with no new scraping needed.
+	sourceURL := fmt.Sprintf("https://www.flowrestling.org/rankings/%d-rankings/%d-edition", containerID, we.Edition.ID)
 	snap := store.Snapshot{
 		SourceID:      sourceID,
 		WeightClass:   we.WeightClass,
 		Season:        season,
 		PublishedDate: we.Edition.PublishDate,
 		CapturedAt:    captured,
+		SourceURL:     &sourceURL,
 	}
 	entries := toEntries(rows)
 

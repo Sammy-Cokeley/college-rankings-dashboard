@@ -34,9 +34,9 @@ func IngestEdition(ctx context.Context, db *sql.DB, snap Snapshot, entries []Ran
 
 	var snapshotID int64
 	err = tx.QueryRowContext(ctx,
-		`INSERT INTO snapshots (source_id, weight_class, season, published_date, captured_at)
-		 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-		snap.SourceID, snap.WeightClass, snap.Season, snap.PublishedDate, snap.CapturedAt).Scan(&snapshotID)
+		`INSERT INTO snapshots (source_id, weight_class, season, published_date, captured_at, source_url)
+		 VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+		snap.SourceID, snap.WeightClass, snap.Season, snap.PublishedDate, snap.CapturedAt, snap.SourceURL).Scan(&snapshotID)
 	if err != nil {
 		return 0, false, fmt.Errorf("insert snapshot: %w", err)
 	}

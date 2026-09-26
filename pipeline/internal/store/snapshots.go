@@ -13,8 +13,9 @@ type Snapshot struct {
 	SourceID      int64
 	WeightClass   int
 	Season        int
-	PublishedDate string // ISO-8601 date, e.g. "2026-01-13"
-	CapturedAt    string // ISO-8601 datetime, e.g. "2026-01-13T18:04:00Z"
+	PublishedDate string  // ISO-8601 date, e.g. "2026-01-13"
+	CapturedAt    string  // ISO-8601 datetime, e.g. "2026-01-13T18:04:00Z"
+	SourceURL     *string // the exact page this was scraped from, when known (db/migrations/0007); nil for Fan Poll and older pre-0007 data
 }
 
 // RankingEntry is a wrestler's position within one snapshot. WrestlerID is nil
@@ -54,9 +55,9 @@ type Movement struct {
 func InsertSnapshot(ctx context.Context, db *sql.DB, s Snapshot) (int64, error) {
 	var id int64
 	err := db.QueryRowContext(ctx,
-		`INSERT INTO snapshots (source_id, weight_class, season, published_date, captured_at)
-		 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-		s.SourceID, s.WeightClass, s.Season, s.PublishedDate, s.CapturedAt).Scan(&id)
+		`INSERT INTO snapshots (source_id, weight_class, season, published_date, captured_at, source_url)
+		 VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+		s.SourceID, s.WeightClass, s.Season, s.PublishedDate, s.CapturedAt, s.SourceURL).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("insert snapshot: %w", err)
 	}
@@ -81,9 +82,9 @@ func InsertRankingEntry(ctx context.Context, db *sql.DB, e RankingEntry) (int64,
 func GetSnapshot(ctx context.Context, db *sql.DB, id int64) (Snapshot, error) {
 	var s Snapshot
 	err := db.QueryRowContext(ctx,
-		`SELECT id, source_id, weight_class, season, published_date, captured_at
+		`SELECT id, source_id, weight_class, season, published_date, captured_at, source_url
 		 FROM snapshots WHERE id = $1`, id).
-		Scan(&s.ID, &s.SourceID, &s.WeightClass, &s.Season, &s.PublishedDate, &s.CapturedAt)
+		Scan(&s.ID, &s.SourceID, &s.WeightClass, &s.Season, &s.PublishedDate, &s.CapturedAt, &s.SourceURL)
 	if err != nil {
 		return Snapshot{}, fmt.Errorf("get snapshot %d: %w", id, err)
 	}

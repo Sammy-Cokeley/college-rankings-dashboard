@@ -53,6 +53,25 @@ export async function latestDate(
   return rows[0]?.date ?? null
 }
 
+// getEditionUrl returns the exact page one edition was scraped from
+// (snapshots.source_url, db/migrations/0007), or null when the pipeline
+// didn't record one — Fan Poll (not an external source) or data ingested
+// before this column existed. The table's own UNIQUE(source_id,
+// weight_class, season, published_date) already scopes this to one row.
+export async function getEditionUrl(
+  db: Db,
+  sourceId: number,
+  weight: number,
+  season: number,
+  date: string,
+): Promise<string | null> {
+  const rows = await db<{ url: string | null }[]>`
+    SELECT source_url AS url
+    FROM snapshots
+    WHERE source_id = ${sourceId} AND weight_class = ${weight} AND season = ${season} AND published_date = ${date}`
+  return rows[0]?.url ?? null
+}
+
 // editionEntries returns one edition's rows with each wrestler's previous rank
 // attached. This is the pipeline's MovementForWeight query (schema.md §5;
 // pipeline/internal/store/snapshots.go) computed over the whole season so LAG

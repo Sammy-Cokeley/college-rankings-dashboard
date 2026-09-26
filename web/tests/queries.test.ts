@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
   editionEntries,
+  getEditionUrl,
   getSeason,
   getSourceId,
   latestDate,
@@ -165,6 +166,27 @@ describe('latestDate', () => {
   it('returns the max published_date for the weight', async () => {
     expect(await latestDate(db, SRC, W, SEASON)).toBe(d4)
     expect(await latestDate(db, SRC, 157, SEASON)).toBeNull()
+  })
+})
+
+describe('getEditionUrl', () => {
+  it('returns null when the pipeline recorded no source_url (the shared corpus never sets one)', async () => {
+    expect(await getEditionUrl(db, SRC, W, SEASON, d1)).toBeNull()
+  })
+
+  it('returns the recorded source_url for a specific edition', async () => {
+    // Own snapshot, a weight/date the shared corpus doesn't use, so this
+    // doesn't interfere with any other test's assumptions about W/d1..d4.
+    await db`
+      INSERT INTO snapshots (source_id, weight_class, season, published_date, captured_at, source_url)
+      VALUES (${SRC}, 174, ${SEASON}, '2026-02-01', '2026-02-01T12:00:00Z', 'https://www.flowrestling.org/rankings/1-r/2-e')`
+    expect(await getEditionUrl(db, SRC, 174, SEASON, '2026-02-01')).toBe(
+      'https://www.flowrestling.org/rankings/1-r/2-e',
+    )
+  })
+
+  it('returns null for a date with no snapshot at all', async () => {
+    expect(await getEditionUrl(db, SRC, W, SEASON, '1999-01-01')).toBeNull()
   })
 })
 

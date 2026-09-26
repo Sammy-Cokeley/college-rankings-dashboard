@@ -57,6 +57,12 @@ const { data: seriesData } = await useFetch<SeasonSeries>(seriesUrl)
 const edition = computed(() => data.value?.edition ?? null)
 const dates = computed(() => data.value?.dates ?? [])
 
+// Prefer the exact edition's own page when the pipeline recorded one
+// (db/migrations/0007); fall back to the source's stable homepage otherwise
+// (older data ingested before that column existed, or a source with no
+// per-edition URL at all).
+const attributionUrl = computed(() => edition.value?.url ?? data.value?.sourceUrl ?? null)
+
 const prevDate = computed(() =>
   edition.value ? (dates.value[edition.value.week - 2]?.date ?? null) : null,
 )
@@ -204,8 +210,8 @@ useSeoMeta({
         <p class="sub">
           WK {{ edition.week }} / {{ edition.date }} / {{ data.source }} / {{ seasonLabel }}
           <a
-            v-if="data.sourceUrl"
-            :href="data.sourceUrl"
+            v-if="attributionUrl"
+            :href="attributionUrl"
             target="_blank"
             rel="noopener"
             class="source-link"

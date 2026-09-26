@@ -1,7 +1,7 @@
 import type { WeightRankings } from '../../../types/rankings'
 import { isWeightClass } from '../../../utils/weights'
 import { useDb } from '../../utils/db'
-import { editionEntries, getSeason, getSourceId, listDates } from '../../utils/queries'
+import { editionEntries, getEditionUrl, getSeason, getSourceId, listDates } from '../../utils/queries'
 import { resolveSource } from '../../utils/source'
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
@@ -54,6 +54,7 @@ export default defineEventHandler(async (event): Promise<WeightRankings> => {
       season,
       date: edition.date,
       week: edition.week,
+      url: await getEditionUrl(db, sourceId, weight, season, edition.date),
       entries: await editionEntries(db, sourceId, weight, season, edition.date),
     },
     dates,
