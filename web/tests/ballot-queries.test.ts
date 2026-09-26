@@ -3,6 +3,7 @@ import type { Db } from '../server/utils/queries'
 import {
   EmptyBallotError,
   getBallot,
+  getBallotHistory,
   getRosterSeason,
   InvalidWrestlerError,
   saveBallot,
@@ -181,5 +182,44 @@ describe('submitBallot', () => {
       SELECT id FROM ballot_submissions
       WHERE user_id = ${userId} AND weight_class = 197 AND season = ${SEASON}`
     expect(submissions).toHaveLength(2)
+  })
+})
+
+describe('getBallotHistory', () => {
+  // A dedicated user, not the shared `userId` above — getBallotHistory
+  // returns EVERY weight class for one user, so reusing the shared fixture
+  // user would pick up the submitBallot describe block's own submissions
+  // too, making "exactly N results" assertions depend on test order.
+  async function mkUser(email: string) {
+    const [u] = await db<{ id: number }[]>`
+      INSERT INTO users (email, password_hash, created_at)
+      VALUES (${email}, 'x', ${new Date().toISOString()}) RETURNING id`
+    return u!.id
+  }
+
+  it('returns submissions newest first, across weight classes, with school joined per submission', async () => {
+    const historyUserId = await mkUser('history-test@example.com')
+
+    await saveBallot(db, historyUserId, 125, SEASON, [iowaWrestler])
+    await submitBallot(db, historyUserId, 125, SEASON)
+    await new Promise((r) => setTimeout(r, 5)) // ensure a distinct, later submitted_at
+    await saveBallot(db, historyUserId, 133, SEASON, [iowaWrestler133])
+    await submitBallot(db, historyUserId, 133, SEASON)
+
+    const history = await getBallotHistory(db, historyUserId)
+    expect(history).toHaveLength(2)
+    expect(history[0]!.weightClass).toBe(133) // most recent submission first
+    expect(history[0]!.entries).toEqual([
+      { rank: 1, wrestlerId: iowaWrestler133, name: 'Off Weight Guy', school: 'Iowa' },
+    ])
+    expect(history[1]!.weightClass).toBe(125)
+    expect(history[1]!.entries).toEqual([
+      { rank: 1, wrestlerId: iowaWrestler, name: 'Real Deal', school: 'Iowa' },
+    ])
+  })
+
+  it('returns empty for a user with no submissions', async () => {
+    const freshUserId = await mkUser('no-history-test@example.com')
+    expect(await getBallotHistory(db, freshUserId)).toEqual([])
   })
 })

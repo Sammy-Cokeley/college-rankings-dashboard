@@ -1,5 +1,5 @@
 import type { Db } from './queries'
-import type { Ballot, BallotEntry, WrestlerOption } from '../../types/ballots'
+import type { Ballot, BallotEntry, BallotSubmission, WrestlerOption } from '../../types/ballots'
 
 // getRosterSeason returns the newest season present in roster_entries — NOT
 // the same value as getSeason() (rankings), and not expected to be
@@ -174,4 +174,43 @@ export async function submitBallot(
     }))
     await sql`INSERT INTO ballot_submission_entries ${sql(rows, 'submission_id', 'rank', 'wrestler_id')}`
   })
+}
+
+// getBallotHistory returns a user's full submission history across every
+// weight class, newest first — what /profile's "Previous ballots" list
+// reads. School is joined per-submission's own `season` (not the current
+// roster season) so a past submission shows the school as it was at the
+// time, matching getBallot's join pattern.
+export async function getBallotHistory(db: Db, userId: number): Promise<BallotSubmission[]> {
+  const rows = await db<
+    Array<{
+      id: number
+      weightClass: number
+      submittedAt: string
+      rank: number
+      wrestlerId: number
+      name: string
+      school: string | null
+    }>
+  >`
+    SELECT bs.id, bs.weight_class AS "weightClass", bs.submitted_at AS "submittedAt",
+           bse.rank, bse.wrestler_id AS "wrestlerId", w.full_name AS name, s.name AS school
+    FROM ballot_submissions bs
+    JOIN ballot_submission_entries bse ON bse.submission_id = bs.id
+    JOIN wrestlers w ON w.id = bse.wrestler_id
+    LEFT JOIN roster_entries re ON re.wrestler_id = w.id AND re.season = bs.season
+    LEFT JOIN schools s ON s.id = re.school_id
+    WHERE bs.user_id = ${userId}
+    ORDER BY bs.submitted_at DESC, bs.id DESC, bse.rank`
+
+  const bySubmission = new Map<number, BallotSubmission>()
+  for (const r of rows) {
+    let submission = bySubmission.get(r.id)
+    if (!submission) {
+      submission = { id: r.id, weightClass: r.weightClass, submittedAt: r.submittedAt, entries: [] }
+      bySubmission.set(r.id, submission)
+    }
+    submission.entries.push({ rank: r.rank, wrestlerId: r.wrestlerId, name: r.name, school: r.school })
+  }
+  return [...bySubmission.values()]
 }
