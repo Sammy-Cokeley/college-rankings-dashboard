@@ -87,13 +87,27 @@ func Run(ctx context.Context, db *sql.DB, season, minBallots int, now time.Time)
 	return res, nil
 }
 
+// ballotPicks reads each contributor's MOST RECENT ballot_submissions row
+// for this weight+season (not the live, still-rolling ballots/ballot_entries
+// table) — a user who submitted in an earlier week but hasn't resubmitted
+// since still counts (carry-over, decided with the user), and an edit made
+// to their currently-open ballot after this week's aggregation already ran
+// never retroactively changes a published week. ROW_NUMBER, not MAX(id) or
+// similar, so the tie is broken consistently even if submitted_at were ever
+// equal (shouldn't happen — timestamps are set server-side per request —
+// but id DESC as the tiebreak costs nothing and removes the ambiguity).
 func ballotPicks(ctx context.Context, db *sql.DB, weight, season int) ([]BallotPick, error) {
 	rows, err := db.QueryContext(ctx, `
-SELECT be.ballot_id, be.rank, be.wrestler_id, w.full_name
-FROM ballot_entries be
-JOIN ballots b ON b.id = be.ballot_id
-JOIN wrestlers w ON w.id = be.wrestler_id
-WHERE b.weight_class = $1 AND b.season = $2`, weight, season)
+WITH latest AS (
+  SELECT id, user_id,
+         ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY submitted_at DESC, id DESC) AS rn
+  FROM ballot_submissions
+  WHERE weight_class = $1 AND season = $2
+)
+SELECT bse.submission_id, bse.rank, bse.wrestler_id, w.full_name
+FROM ballot_submission_entries bse
+JOIN latest l ON l.id = bse.submission_id AND l.rn = 1
+JOIN wrestlers w ON w.id = bse.wrestler_id`, weight, season)
 	if err != nil {
 		return nil, fmt.Errorf("query ballot picks: %w", err)
 	}
@@ -110,11 +124,13 @@ WHERE b.weight_class = $1 AND b.season = $2`, weight, season)
 	return out, rows.Err()
 }
 
-// CurrentBallotSeason returns the newest season with any ballot data, or nil
-// if no ballots exist yet at all.
+// CurrentBallotSeason returns the newest season with any ballot SUBMISSION
+// (not just a live, still-in-progress draft — a draft with no Submit yet
+// contributes nothing to any published week, so it shouldn't drive which
+// season a run picks either).
 func CurrentBallotSeason(ctx context.Context, db *sql.DB) (*int, error) {
 	var season sql.NullInt64
-	if err := db.QueryRowContext(ctx, `SELECT MAX(season) FROM ballots`).Scan(&season); err != nil {
+	if err := db.QueryRowContext(ctx, `SELECT MAX(season) FROM ballot_submissions`).Scan(&season); err != nil {
 		return nil, fmt.Errorf("current ballot season: %w", err)
 	}
 	if !season.Valid {

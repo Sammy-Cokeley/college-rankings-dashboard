@@ -12,10 +12,14 @@ import "sort"
 var WeightClasses = [10]int{125, 133, 141, 149, 157, 165, 174, 184, 197, 285}
 
 // BallotPick is one (ballot, rank, wrestler) row feeding the scorer — a
-// flattened join of ballot_entries -> wrestlers for one weight+season.
+// flattened join of ballot_submission_entries -> wrestlers for one
+// weight+season, scoped to each contributor's most recent submission
+// (run.go's ballotPicks) so a user who hasn't resubmitted still counts via
+// carry-over, and an edit to their still-open live ballot never affects an
+// already-published week.
 type BallotPick struct {
-	BallotID   int64
-	Rank       int // 1..33, as constrained by ballot_entries.rank
+	BallotID   int64 // ballot_submissions.id — one per contributing submission, not the rolling ballots.id
+	Rank       int   // 1..33, as constrained by ballot_submission_entries.rank
 	WrestlerID int64
 	FullName   string
 }

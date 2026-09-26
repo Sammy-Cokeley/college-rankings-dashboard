@@ -82,6 +82,12 @@ export class InvalidWrestlerError extends Error {
   }
 }
 
+export class EmptyBallotError extends Error {
+  constructor() {
+    super('cannot submit a ballot with no entries')
+  }
+}
+
 // saveBallot replaces a user's entire ballot at one weight with the given
 // ordered wrestler list (rank = array position + 1) — simpler and safer than
 // diffing against the previous state, and matches the autosave-the-whole-
@@ -126,5 +132,46 @@ export async function saveBallot(
       wrestler_id: wrestlerId,
     }))
     await sql`INSERT INTO ballot_entries ${sql(rows, 'ballot_id', 'rank', 'wrestler_id')}`
+  })
+}
+
+// submitBallot snapshots a user's already-persisted ballot (whatever's
+// currently saved via saveBallot/autosave) into ballot_submissions — the
+// append-only history cmd/aggregate-poll and /profile's history page read
+// from. No wrestlerIds parameter: it copies live ballot_entries rather than
+// trusting a client-supplied list, so a submission always exactly matches
+// what's actually saved, never something the client merely claims is saved.
+export async function submitBallot(
+  db: Db,
+  userId: number,
+  weight: number,
+  season: number,
+): Promise<void> {
+  const now = new Date().toISOString()
+  await db.begin(async (sql) => {
+    const [ballot] = await sql<{ id: number }[]>`
+      SELECT id FROM ballots
+      WHERE user_id = ${userId} AND weight_class = ${weight} AND season = ${season}`
+    const entries = ballot
+      ? await sql<{ rank: number; wrestlerId: number }[]>`
+          SELECT rank, wrestler_id AS "wrestlerId"
+          FROM ballot_entries WHERE ballot_id = ${ballot.id} ORDER BY rank`
+      : []
+    if (entries.length === 0) {
+      throw new EmptyBallotError()
+    }
+
+    const [submission] = await sql<{ id: number }[]>`
+      INSERT INTO ballot_submissions (user_id, weight_class, season, submitted_at)
+      VALUES (${userId}, ${weight}, ${season}, ${now})
+      RETURNING id`
+    const submissionId = submission!.id
+
+    const rows = entries.map((e) => ({
+      submission_id: submissionId,
+      rank: e.rank,
+      wrestler_id: e.wrestlerId,
+    }))
+    await sql`INSERT INTO ballot_submission_entries ${sql(rows, 'submission_id', 'rank', 'wrestler_id')}`
   })
 }

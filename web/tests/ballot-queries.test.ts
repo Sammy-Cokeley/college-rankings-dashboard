@@ -1,6 +1,14 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { Db } from '../server/utils/queries'
-import { getBallot, getRosterSeason, InvalidWrestlerError, saveBallot, searchWrestlers } from '../server/utils/ballot-queries'
+import {
+  EmptyBallotError,
+  getBallot,
+  getRosterSeason,
+  InvalidWrestlerError,
+  saveBallot,
+  searchWrestlers,
+  submitBallot,
+} from '../server/utils/ballot-queries'
 import { createTestDb } from './helpers/pg-test-db'
 
 let db: Db
@@ -124,5 +132,54 @@ describe('getBallot / saveBallot', () => {
     const b157 = await getBallot(db, userId, 157, SEASON)
     expect(b149.entries.map((e) => e.wrestlerId)).toEqual([iowaWrestler])
     expect(b157.entries.map((e) => e.wrestlerId)).toEqual([iowaWrestler133])
+  })
+})
+
+describe('submitBallot', () => {
+  it('throws EmptyBallotError when there is nothing to submit', async () => {
+    await expect(submitBallot(db, userId, 174, SEASON)).rejects.toBeInstanceOf(EmptyBallotError)
+  })
+
+  it('snapshots the current ballot into ballot_submissions, matching saveBallot exactly', async () => {
+    await saveBallot(db, userId, 174, SEASON, [iowaWrestler, iowaWrestler133])
+    await submitBallot(db, userId, 174, SEASON)
+
+    const [submission] = await db<{ id: number }[]>`
+      SELECT id FROM ballot_submissions
+      WHERE user_id = ${userId} AND weight_class = 174 AND season = ${SEASON}`
+    expect(submission).toBeDefined()
+
+    const entries = await db<{ rank: number; wrestlerId: number }[]>`
+      SELECT rank, wrestler_id AS "wrestlerId" FROM ballot_submission_entries
+      WHERE submission_id = ${submission!.id} ORDER BY rank`
+    expect(entries).toEqual([
+      { rank: 1, wrestlerId: iowaWrestler },
+      { rank: 2, wrestlerId: iowaWrestler133 },
+    ])
+  })
+
+  it('a later edit to the live ballot does not change an already-submitted snapshot', async () => {
+    await saveBallot(db, userId, 184, SEASON, [iowaWrestler])
+    await submitBallot(db, userId, 184, SEASON)
+    await saveBallot(db, userId, 184, SEASON, [iowaWrestler133]) // edit AFTER submitting
+
+    const [submission] = await db<{ id: number }[]>`
+      SELECT id FROM ballot_submissions
+      WHERE user_id = ${userId} AND weight_class = 184 AND season = ${SEASON}`
+    const entries = await db<{ wrestlerId: number }[]>`
+      SELECT wrestler_id AS "wrestlerId" FROM ballot_submission_entries WHERE submission_id = ${submission!.id}`
+    expect(entries).toEqual([{ wrestlerId: iowaWrestler }]) // unchanged, not iowaWrestler133
+  })
+
+  it('submitting twice creates two separate history rows, not a replace', async () => {
+    await saveBallot(db, userId, 197, SEASON, [iowaWrestler])
+    await submitBallot(db, userId, 197, SEASON)
+    await saveBallot(db, userId, 197, SEASON, [iowaWrestler133])
+    await submitBallot(db, userId, 197, SEASON)
+
+    const submissions = await db<{ id: number }[]>`
+      SELECT id FROM ballot_submissions
+      WHERE user_id = ${userId} AND weight_class = 197 AND season = ${SEASON}`
+    expect(submissions).toHaveLength(2)
   })
 })
