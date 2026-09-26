@@ -45,7 +45,22 @@ async function loadEntries() {
   saveState.value = 'idle'
   if (loggedIn.value) {
     const ballot = await $fetch<{ entries: BallotEntry[] }>(`/api/ballots/${weight.value}`)
-    entries.value = ballot.entries
+    const draftRaw = import.meta.client ? localStorage.getItem(storageKey(weight.value)) : null
+    if (ballot.entries.length === 0 && draftRaw) {
+      // A draft built while logged out and a fresh (empty) server ballot —
+      // recover the draft instead of silently discarding it: the previous
+      // behavior just did `entries.value = ballot.entries` here, wiping out
+      // whatever the user had built anonymously the moment they signed up.
+      // persist() saves it server-side immediately rather than waiting on
+      // the debounced watcher, so a page close right after this still keeps it.
+      entries.value = JSON.parse(draftRaw) as BallotEntry[]
+      await persist()
+      if (saveState.value !== 'error') localStorage.removeItem(storageKey(weight.value))
+    } else {
+      entries.value = ballot.entries
+      // A real server ballot already exists — the draft is stale either way.
+      if (draftRaw) localStorage.removeItem(storageKey(weight.value))
+    }
   } else if (import.meta.client) {
     const raw = localStorage.getItem(storageKey(weight.value))
     entries.value = raw ? (JSON.parse(raw) as BallotEntry[]) : []
