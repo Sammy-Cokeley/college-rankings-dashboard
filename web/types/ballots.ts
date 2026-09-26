@@ -22,3 +22,14 @@ export interface Ballot {
   updatedAt: string | null // null when the user has no ballot yet at this weight
   entries: BallotEntry[]
 }
+
+// One past Submit — the append-only history /profile's "Previous ballots"
+// list reads (server/utils/ballot-queries.ts getBallotHistory). Distinct
+// from Ballot: this is a point-in-time snapshot, never updated after the
+// fact, unlike the live/rolling ballot the builder page edits.
+export interface BallotSubmission {
+  id: number
+  weightClass: number
+  submittedAt: string
+  entries: BallotEntry[]
+}

@@ -19,7 +19,7 @@ const { toggle } = useTheme()
         <AuthState>
           <template #default="{ loggedIn, user, clear }">
             <span v-if="loggedIn" class="auth-status">
-              {{ user?.displayName || user?.email }}
+              <NuxtLink to="/profile" class="auth-link">{{ user?.displayName || user?.email }}</NuxtLink>
               <button class="auth-link" @click="clear">Log out</button>
             </span>
             <NuxtLink v-else to="/login" class="auth-link">Log in</NuxtLink>
