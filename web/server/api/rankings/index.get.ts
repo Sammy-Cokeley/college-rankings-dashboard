@@ -33,5 +33,5 @@ export default defineEventHandler(async (event): Promise<RankingsOverview> => {
       entries: await editionEntries(db, sourceId, weight, season, latest.date),
     })
   }
-  return { source: source.name, season, weights }
+  return { source: source.name, sourceUrl: source.url, season, weights }
 })

@@ -276,6 +276,16 @@ a {
   font-family: var(--font-mono);
 }
 
+.source-link {
+  margin-left: 0.6rem;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.source-link:hover {
+  text-decoration: underline;
+}
+
 .source-tabs {
   display: flex;
   gap: 0.35rem;

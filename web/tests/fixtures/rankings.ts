@@ -34,6 +34,7 @@ export const editionDates: EditionDate[] = [
 export function weightRankings(weight: number, entries: RankingRow[]): WeightRankings {
   return {
     source: 'FloWrestling',
+    sourceUrl: 'https://www.flowrestling.org',
     edition: {
       weight,
       season: 2026,
@@ -46,7 +47,7 @@ export function weightRankings(weight: number, entries: RankingRow[]): WeightRan
 }
 
 export function rankingsOverview(weights: Edition[]): RankingsOverview {
-  return { source: 'FloWrestling', season: 2026, weights }
+  return { source: 'FloWrestling', sourceUrl: 'https://www.flowrestling.org', season: 2026, weights }
 }
 
 // One single-point series per resolved entry, so every fixture wrestlerId is
