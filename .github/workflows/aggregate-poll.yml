@@ -1,0 +1,44 @@
+name: Weekly Fan Poll aggregation
+
+# Publishes the Fan Poll's weekly ranking from submitted ballots
+# (ballot_submissions — see db/migrations/0006_ballot_submissions.sql).
+# cmd/aggregate-poll reads each contributor's MOST RECENT submission as of
+# whenever this runs, so the schedule below effectively IS the weekly
+# deadline: a submission counts for a given week if it landed before this
+# job's next run, and an un-resubmitted ballot carries over (decided with
+# the user — same as Flo/InterMat not dropping a wrestler just because
+# nothing changed).
+#
+# CRON VALUE IS A PLACEHOLDER (currently Sunday 23:00 UTC) — the actual
+# weekly deadline is the user's call, not guessed at here. Change the single
+# `cron:` line below to whatever day/time is decided; nothing else in this
+# workflow depends on the specific value.
+#
+# Separate from scrape.yml (daily, different sources, different cadence)
+# rather than a second schedule trigger on the same workflow — keeps each
+# file's purpose and cron value unambiguous instead of needing to branch on
+# github.event.schedule to tell two triggers' steps apart.
+#
+# Until DATABASE_URL (repo secret) points at a real database, every run
+# fails — same intentional-until-there's-a-production-DB state as scrape.yml.
+on:
+  schedule:
+    - cron: '0 23 * * 0'
+  workflow_dispatch: {}
+
+jobs:
+  aggregate:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    defaults:
+      run:
+        working-directory: pipeline
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: pipeline/go.mod
+
+      - name: Aggregate Fan Poll ballots
+        run: go run ./cmd/aggregate-poll
