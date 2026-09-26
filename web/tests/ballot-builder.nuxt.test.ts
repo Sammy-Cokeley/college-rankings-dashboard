@@ -112,6 +112,41 @@ describe('ballot builder — logged in', () => {
     expect(localStorage.getItem('ballot-draft-149')).toBeNull()
   })
 
+  it('recovers a draft left over from before signing in, and persists it to the server', async () => {
+    // The bug this pins: loadEntries used to just overwrite entries with the
+    // empty server ballot here, silently discarding whatever a user built
+    // anonymously the moment they signed up.
+    flags.loggedIn = true
+    ballotEntries = [] // fresh server ballot — nothing saved under this account yet
+    localStorage.setItem(
+      'ballot-draft-149',
+      JSON.stringify([{ rank: 1, wrestlerId: 1, name: 'Real Deal', school: 'Iowa' }]),
+    )
+
+    const wrapper = await mountSuspended(BallotPage)
+    await vi.waitFor(() => expect(wrapper.find('.ballot-list').exists()).toBe(true))
+    expect(wrapper.find('.ballot-list').text()).toContain('Real Deal')
+
+    await vi.waitFor(() => expect(patchBody).toEqual({ wrestlerIds: [1] }))
+    expect(localStorage.getItem('ballot-draft-149')).toBeNull()
+  })
+
+  it('prefers an existing server ballot over a stale draft, and clears the draft either way', async () => {
+    flags.loggedIn = true
+    ballotEntries = [{ rank: 1, wrestlerId: 2, name: 'Off Weight Guy', school: 'Penn State' }]
+    localStorage.setItem(
+      'ballot-draft-149',
+      JSON.stringify([{ rank: 1, wrestlerId: 1, name: 'Real Deal', school: 'Iowa' }]),
+    )
+
+    const wrapper = await mountSuspended(BallotPage)
+    await vi.waitFor(() => expect(wrapper.find('.ballot-list').exists()).toBe(true))
+    expect(wrapper.find('.ballot-list').text()).toContain('Off Weight Guy')
+    expect(wrapper.find('.ballot-list').text()).not.toContain('Real Deal')
+    expect(patchBody).toBeUndefined() // never re-saved — the server ballot was already authoritative
+    expect(localStorage.getItem('ballot-draft-149')).toBeNull()
+  })
+
   it('does not autosave on initial load — only after a real edit', async () => {
     ballotEntries = [{ rank: 1, wrestlerId: 2, name: 'Off Weight Guy', school: 'Penn State' }]
     flags.loggedIn = true
