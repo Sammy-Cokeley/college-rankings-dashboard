@@ -35,6 +35,11 @@ const entries = ref<BallotEntry[]>([])
 const loaded = ref(false)
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 const saveState = ref<SaveState>('idle')
+// Separate from saveState: autosave (every edit) and Submit (an explicit,
+// deliberate action that snapshots into ballot_submissions history) are
+// different concepts, each with their own indicator.
+type SubmitState = 'idle' | 'submitting' | 'submitted' | 'error'
+const submitState = ref<SubmitState>('idle')
 
 function storageKey(w: number) {
   return `ballot-draft-${w}`
@@ -73,6 +78,7 @@ async function loadEntries() {
   // pending watcher callback run — and bail out — while loaded is still false.
   await nextTick()
   loaded.value = true
+  submitState.value = 'idle'
 }
 
 onMounted(loadEntries)
@@ -87,6 +93,9 @@ watch(
     if (!loaded.value) return
     clearTimeout(debounceTimer)
     debounceTimer = setTimeout(persist, 500)
+    // A real edit means the ballot no longer matches whatever was last
+    // submitted — drop the "Submitted" indicator so it can't lie.
+    if (submitState.value === 'submitted') submitState.value = 'idle'
   },
   { deep: true },
 )
@@ -107,6 +116,23 @@ async function persist() {
     // Guests: client-side only, never sent to the write API — the API is
     // auth-guarded anyway, so there's no server round trip to gate here.
     localStorage.setItem(storageKey(weight.value), JSON.stringify(entries.value))
+  }
+}
+
+// submit() finalizes the current (already-autosaved) picks into ballot
+// history — a deliberate action distinct from autosave, which the weekly
+// aggregation job reads for that week's Fan Poll and /profile's history
+// page displays. Not gated on saveState here: the debounced autosave may
+// still be in flight, but the server always has the latest PATCH by the
+// time this request lands (same-connection ordering), so there's nothing
+// to wait on client-side.
+async function submit() {
+  submitState.value = 'submitting'
+  try {
+    await $fetch(`/api/ballots/${weight.value}/submit`, { method: 'POST' })
+    submitState.value = 'submitted'
+  } catch {
+    submitState.value = 'error'
   }
 }
 
@@ -161,11 +187,27 @@ useSeoMeta({ title: () => `Build your ${weight.value} ballot — NCAA DI Wrestli
           <NuxtLink :to="{ path: '/login', query: redirectQuery }">log in</NuxtLink>
           to save your ballot and have it count.
         </span>
-        <span v-else-if="saveState === 'saving'" class="save-indicator">Saving…</span>
-        <span v-else-if="saveState === 'saved'" class="save-indicator saved">Saved</span>
-        <span v-else-if="saveState === 'error'" class="save-indicator error">
-          Couldn't save — check your connection
-        </span>
+        <template v-else>
+          <span v-if="saveState === 'saving'" class="save-indicator">Saving…</span>
+          <span v-else-if="saveState === 'saved'" class="save-indicator saved">Saved</span>
+          <span v-else-if="saveState === 'error'" class="save-indicator error">
+            Couldn't save — check your connection
+          </span>
+          <button
+            type="button"
+            class="submit-ballot"
+            :disabled="entries.length === 0 || submitState === 'submitting'"
+            @click="submit"
+          >
+            {{ submitState === 'submitting' ? 'Submitting…' : 'Submit' }}
+          </button>
+          <span v-if="submitState === 'submitted'" class="submit-indicator submitted">
+            Submitted — counts toward this week's Fan Poll
+          </span>
+          <span v-else-if="submitState === 'error'" class="submit-indicator error">
+            Couldn't submit — try again
+          </span>
+        </template>
       </div>
     </div>
 
@@ -249,6 +291,9 @@ useSeoMeta({ title: () => `Build your ${weight.value} ballot — NCAA DI Wrestli
 .status {
   font-size: 0.85rem;
   color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
 }
 
 .guest-note a {
@@ -260,6 +305,34 @@ useSeoMeta({ title: () => `Build your ${weight.value} ballot — NCAA DI Wrestli
 }
 
 .save-indicator.error {
+  color: var(--down);
+}
+
+.submit-ballot {
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent-ink);
+  background: var(--chip);
+  border: none;
+  border-radius: 0.35rem;
+  padding: 0.35rem 0.8rem;
+  cursor: pointer;
+}
+
+.submit-ballot:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.submit-ballot:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.submit-indicator.submitted {
+  color: var(--up);
+}
+
+.submit-indicator.error {
   color: var(--down);
 }
 

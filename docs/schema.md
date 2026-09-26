@@ -143,6 +143,34 @@ CREATE TABLE ballot_entries (
 );
 
 CREATE INDEX idx_ballot_entries_wrestler ON ballot_entries(wrestler_id);
+
+-- A user's ballot submission history — the "Phase 4" the comment above
+-- anticipated (0004_ballots.sql). Append-only: one new row pair per Submit
+-- click, never updated or replaced — the history IS the table. The weekly
+-- aggregation job (cmd/aggregate-poll) reads each user's MOST RECENT
+-- submission as of its run time, which gets carry-over (an un-resubmitted
+-- ballot still counts) for free, with no extra "which week" bookkeeping.
+CREATE TABLE ballot_submissions (
+  id           INTEGER PRIMARY KEY,
+  user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  weight_class INTEGER NOT NULL CHECK (weight_class IN (125,133,141,149,157,165,174,184,197,285)),
+  season       INTEGER NOT NULL,
+  submitted_at TEXT NOT NULL
+);
+
+-- One ranked slot on a submission — same shape as ballot_entries, copied
+-- verbatim at submit time rather than referencing ballot_entries directly,
+-- so a later edit to the still-rolling live ballot never rewrites history.
+CREATE TABLE ballot_submission_entries (
+  id            INTEGER PRIMARY KEY,
+  submission_id INTEGER NOT NULL REFERENCES ballot_submissions(id) ON DELETE CASCADE,
+  rank          INTEGER NOT NULL CHECK (rank BETWEEN 1 AND 33),
+  wrestler_id   INTEGER NOT NULL REFERENCES wrestlers(id),
+  UNIQUE (submission_id, rank),
+  UNIQUE (submission_id, wrestler_id)
+);
+
+CREATE INDEX idx_ballot_submission_entries_wrestler ON ballot_submission_entries(wrestler_id);
 ```
  
 ## Design decisions (and why)

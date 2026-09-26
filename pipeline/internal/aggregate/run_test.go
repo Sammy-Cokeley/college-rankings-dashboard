@@ -11,10 +11,10 @@ import (
 
 const season = 2027
 
-// mustUser/mustWrestler/mustBallot are raw-SQL fixture builders: ballots are
-// entirely web-owned (pipeline/internal/store has no Go-side ballot helpers
-// by design — the aggregation job only ever reads them), so tests seed the
-// same way the real web app's schema expects, by hand.
+// mustUser/mustWrestler/mustSubmission are raw-SQL fixture builders: ballots
+// are entirely web-owned (pipeline/internal/store has no Go-side ballot
+// helpers by design — the aggregation job only ever reads them), so tests
+// seed the same way the real web app's schema expects, by hand.
 func mustUser(t *testing.T, ctx context.Context, db *sql.DB, email string) int64 {
 	t.Helper()
 	var id int64
@@ -37,21 +37,24 @@ func mustWrestler(t *testing.T, ctx context.Context, db *sql.DB, name string) in
 	return id
 }
 
-// mustBallot creates a ballot for userID at weight/season with the given
-// wrestlers in rank order (index 0 = rank 1).
-func mustBallot(t *testing.T, ctx context.Context, db *sql.DB, userID int64, weight int, wrestlerIDs ...int64) {
+// mustSubmission creates a ballot_submissions row (what the aggregation job
+// actually reads — see run.go's ballotPicks) for userID at weight/season
+// with the given wrestlers in rank order (index 0 = rank 1), submitted at
+// the given time — a caller-supplied time so carry-over tests can seed an
+// "earlier week's" submission distinctly from a "later week's."
+func mustSubmission(t *testing.T, ctx context.Context, db *sql.DB, userID int64, weight int, submittedAt time.Time, wrestlerIDs ...int64) {
 	t.Helper()
-	var ballotID int64
+	var submissionID int64
 	err := db.QueryRowContext(ctx,
-		`INSERT INTO ballots (user_id, weight_class, season, updated_at) VALUES ($1, $2, $3, $4) RETURNING id`,
-		userID, weight, season, time.Now().UTC().Format(time.RFC3339)).Scan(&ballotID)
+		`INSERT INTO ballot_submissions (user_id, weight_class, season, submitted_at) VALUES ($1, $2, $3, $4) RETURNING id`,
+		userID, weight, season, submittedAt.UTC().Format(time.RFC3339)).Scan(&submissionID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for i, wid := range wrestlerIDs {
 		if _, err := db.ExecContext(ctx,
-			`INSERT INTO ballot_entries (ballot_id, rank, wrestler_id) VALUES ($1, $2, $3)`,
-			ballotID, i+1, wid); err != nil {
+			`INSERT INTO ballot_submission_entries (submission_id, rank, wrestler_id) VALUES ($1, $2, $3)`,
+			submissionID, i+1, wid); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -64,12 +67,13 @@ func TestRun_PublishesAboveThresholdSkipsBelow(t *testing.T) {
 	alice := mustWrestler(t, ctx, db, "Alice")
 	bob := mustWrestler(t, ctx, db, "Bob")
 
-	// 125: three ballots (meets a threshold of 3).
-	mustBallot(t, ctx, db, mustUser(t, ctx, db, "a@example.com"), 125, alice, bob)
-	mustBallot(t, ctx, db, mustUser(t, ctx, db, "b@example.com"), 125, bob, alice)
-	mustBallot(t, ctx, db, mustUser(t, ctx, db, "c@example.com"), 125, alice, bob)
-	// 133: one ballot only (below the threshold of 3).
-	mustBallot(t, ctx, db, mustUser(t, ctx, db, "d@example.com"), 133, alice)
+	now := time.Now()
+	// 125: three submissions (meets a threshold of 3).
+	mustSubmission(t, ctx, db, mustUser(t, ctx, db, "a@example.com"), 125, now, alice, bob)
+	mustSubmission(t, ctx, db, mustUser(t, ctx, db, "b@example.com"), 125, now, bob, alice)
+	mustSubmission(t, ctx, db, mustUser(t, ctx, db, "c@example.com"), 125, now, alice, bob)
+	// 133: one submission only (below the threshold of 3).
+	mustSubmission(t, ctx, db, mustUser(t, ctx, db, "d@example.com"), 133, now, alice)
 
 	res, err := Run(ctx, db, season, 3, time.Now())
 	if err != nil {
@@ -105,16 +109,60 @@ WHERE s2.weight_class = 125 AND e.rank = 1`).Scan(&sourceName, &rank, &rawName)
 	}
 }
 
+// TestRun_CarriesOverLastSubmissionWhenNoNewOne pins the decided no-submit
+// behavior: a contributor who hasn't resubmitted this week still counts,
+// using their most recent submission — ballotPicks takes each user's latest
+// row regardless of how long ago it was, not "submitted since some cutoff."
+func TestRun_CarriesOverLastSubmissionWhenNoNewOne(t *testing.T) {
+	ctx := context.Background()
+	db := storetest.NewDB(t)
+
+	alice := mustWrestler(t, ctx, db, "Alice")
+	bob := mustWrestler(t, ctx, db, "Bob")
+
+	weekOne := time.Now().Add(-8 * 24 * time.Hour)
+	weekTwo := time.Now()
+
+	// carol submitted once, weeks ago, and never again — still counts.
+	carol := mustUser(t, ctx, db, "carol@example.com")
+	mustSubmission(t, ctx, db, carol, 157, weekOne, alice)
+	// dave submitted twice — only the LATER pick (Bob) should count, not both.
+	dave := mustUser(t, ctx, db, "dave@example.com")
+	mustSubmission(t, ctx, db, dave, 157, weekOne, alice)
+	mustSubmission(t, ctx, db, dave, 157, weekTwo, bob)
+	// erin only ever submitted for a DIFFERENT weight — must not leak in.
+	erin := mustUser(t, ctx, db, "erin@example.com")
+	mustSubmission(t, ctx, db, erin, 165, weekTwo, alice)
+
+	picks, err := ballotPicks(ctx, db, 157, season)
+	if err != nil {
+		t.Fatalf("ballotPicks: %v", err)
+	}
+	if got := DistinctBallots(picks); got != 2 {
+		t.Errorf("DistinctBallots = %d, want 2 (carol + dave, not erin)", got)
+	}
+
+	scored := ScoreWeight(picks)
+	if len(scored) != 2 {
+		t.Fatalf("ScoreWeight len = %d, want 2 (Alice from carol, Bob from dave's LATEST submission)", len(scored))
+	}
+	// Both got exactly one #1 vote each (carol->Alice, dave's latest->Bob) —
+	// tied at 33 points, alphabetical tiebreak: Alice first.
+	if scored[0].FullName != "Alice" || scored[1].FullName != "Bob" {
+		t.Errorf("scored = [%s, %s], want [Alice, Bob]", scored[0].FullName, scored[1].FullName)
+	}
+}
+
 func TestRun_IdempotentSameDay(t *testing.T) {
 	ctx := context.Background()
 	db := storetest.NewDB(t)
 
 	alice := mustWrestler(t, ctx, db, "Alice")
+	now := time.Now()
 	for _, email := range []string{"a@example.com", "b@example.com", "c@example.com"} {
-		mustBallot(t, ctx, db, mustUser(t, ctx, db, email), 149, alice)
+		mustSubmission(t, ctx, db, mustUser(t, ctx, db, email), 149, now, alice)
 	}
 
-	now := time.Now()
 	if _, err := Run(ctx, db, season, 3, now); err != nil {
 		t.Fatalf("first run: %v", err)
 	}
@@ -145,7 +193,7 @@ func TestCurrentBallotSeason(t *testing.T) {
 	}
 
 	alice := mustWrestler(t, ctx, db, "Alice")
-	mustBallot(t, ctx, db, mustUser(t, ctx, db, "a@example.com"), 125, alice)
+	mustSubmission(t, ctx, db, mustUser(t, ctx, db, "a@example.com"), 125, time.Now(), alice)
 
 	got, err = CurrentBallotSeason(ctx, db)
 	if err != nil {
