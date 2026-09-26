@@ -48,6 +48,7 @@ export default defineEventHandler(async (event): Promise<WeightRankings> => {
 
   return {
     source: source.name,
+    sourceUrl: source.url,
     edition: {
       weight,
       season,

@@ -203,6 +203,13 @@ useSeoMeta({
         <h1>{{ weight }}<small>LBS</small></h1>
         <p class="sub">
           WK {{ edition.week }} / {{ edition.date }} / {{ data.source }} / {{ seasonLabel }}
+          <a
+            v-if="data.sourceUrl"
+            :href="data.sourceUrl"
+            target="_blank"
+            rel="noopener"
+            class="source-link"
+          >View on {{ data.source }} ↗</a>
         </p>
         <nav class="source-tabs" aria-label="Ranking source">
           <button

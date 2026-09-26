@@ -149,7 +149,16 @@ useSeoMeta({
     <div class="pagehead">
       <div>
         <h1>All Weights</h1>
-        <p class="sub">LATEST EDITIONS / {{ data.source }} / {{ seasonLabel }}</p>
+        <p class="sub">
+          LATEST EDITIONS / {{ data.source }} / {{ seasonLabel }}
+          <a
+            v-if="data.sourceUrl"
+            :href="data.sourceUrl"
+            target="_blank"
+            rel="noopener"
+            class="source-link"
+          >View on {{ data.source }} ↗</a>
+        </p>
         <nav class="source-tabs" aria-label="Ranking source">
           <button
             v-for="s in SOURCES"

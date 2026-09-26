@@ -60,12 +60,14 @@ export interface Edition {
 
 export interface WeightRankings {
   source: string
+  sourceUrl: string | null // attribution link (utils/sources.ts); null for Fan Poll
   edition: Edition
   dates: EditionDate[] // all editions for the week selector
 }
 
 export interface RankingsOverview {
   source: string
+  sourceUrl: string | null // attribution link (utils/sources.ts); null for Fan Poll
   season: number
   weights: Edition[] // latest edition per weight class
 }
