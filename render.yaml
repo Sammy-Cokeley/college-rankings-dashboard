@@ -1,0 +1,47 @@
+# Render Blueprint — provisions the production Postgres instance and the
+# Nuxt web service together from one "New > Blueprint" import, so there's no
+# manual dashboard click-through to get wrong (build command, start command,
+# and the DATABASE_URL wiring are all declared here, reviewable in git).
+#
+# This does NOT provision anything on its own — it only takes effect once
+# imported as a Blueprint in the Render dashboard. See docs/decisions.md
+# "Stack" for the rest of the production bootstrap checklist (migrations,
+# seed data, the first backfill, GitHub Actions' DATABASE_URL secret, and
+# attaching the domain once it's registered).
+#
+# Pipeline (Go) is NOT a Render service — it already runs as scheduled
+# GitHub Actions jobs (.github/workflows/scrape.yml, aggregate-poll.yml),
+# which only need this database's connection string as a repo secret, not a
+# deploy target of its own.
+
+databases:
+  - name: rankings-db
+    databaseName: rankings
+    user: rankings
+    plan: starter
+
+services:
+  - type: web
+    name: rankings-web
+    runtime: node
+    rootDir: web
+    buildCommand: npm install && npm run build
+    startCommand: node .output/server/index.mjs
+    plan: starter
+    envVars:
+      # Wired automatically from the database above — never hand-typed, so
+      # it can't drift out of sync with the actual instance.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: rankings-db
+          property: connectionString
+      # nuxt-auth-utils' session cookie encryption key — required in
+      # production (web/.env.example). generateValue lets Render mint a
+      # real random secret at deploy time; nobody has to hand-generate or
+      # paste one into the dashboard.
+      - key: NUXT_SESSION_PASSWORD
+        generateValue: true
+      - key: NODE_VERSION
+        value: '20'
+      - key: NODE_ENV
+        value: production
