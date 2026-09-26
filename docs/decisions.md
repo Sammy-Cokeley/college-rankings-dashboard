@@ -186,6 +186,21 @@ roughly doubles v1 vs the launch set alone — accepted explicitly.)_
 - Other sources: NWCA Coaches Poll (ncaa.com) is the designated **fallback
   second source** if the InterMat gate fails; The Open Mat remains unplanned.
   Two sources is thin for any "consensus" framing but fine for display.
+- **Launch checklist: courtesy heads-up to Flo/InterMat before going public.**
+  _(flagged 2026-09-26.)_ Not a consent request — the outreach-first stance
+  above still holds, and asking first risks a "no" that then makes continuing
+  to use public data look adversarial instead of neutral. But once, right
+  before the site actually goes live (not now — nothing to walk back if it's
+  said before launch, unlike after), a low-key "here's what we built, we
+  attribute you prominently" email costs little and can't be vetoed the way
+  an upfront ask can. Timing is the user's call.
+- **Possible future sources raised (2026-09-26), not yet scoped:** WIN
+  Magazine and The Open Mat — same recon-gate discipline as InterMat needed
+  first (bot posture, data shape, update cadence) before committing either.
+  Also raised: "The Barn Session," the user's own family-authored ranking —
+  a different category entirely, since it's not a scrape target; adding it
+  is an authoring-flow decision (closer to how Fan Poll ballots get entered
+  than to a scraper), not a recon gate.
 - **WrestleStat: roster source for the Fan Poll ballot builder.** _(2026-07-28
   — see `sources/wrestlestat.md` for the full recon.)_ Not a ranking source —
   feeds the wrestler pool users pick from when building a ballot. Technically
