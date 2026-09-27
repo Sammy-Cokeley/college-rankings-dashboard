@@ -261,6 +261,36 @@ roughly doubles v1 vs the launch set alone — accepted explicitly.)_
     application-level joins needed.
 - **Decoupling:** pipeline and web share only the DB; `db/` owns the schema as
   language-neutral SQL migrations.
+- **Deploy target: Render.** _(decided 2026-09-26.)_ The "hosted PaaS" this
+  doc predicted never named a specific provider until now — picked because
+  the user already runs another project (Gable Game) on Render, so it's a
+  known quantity, not a new tool to learn. `render.yaml` (repo root)
+  Blueprints both pieces together: the Postgres instance and the Nuxt web
+  service, with `DATABASE_URL` wired from the database automatically
+  (`fromDatabase`/`connectionString`) rather than hand-typed, and
+  `NUXT_SESSION_PASSWORD` minted by Render at deploy time
+  (`generateValue: true`) rather than someone generating and pasting a
+  secret. Pipeline is NOT a Render service — it already runs as scheduled
+  GitHub Actions jobs (`.github/workflows/`), which only need this
+  database's connection string as a repo secret, not a deploy target of
+  their own.
+  - **Bootstrap checklist, once the Blueprint is imported (manual — needs
+    the account owner, not automatable from here):** (1) In the Render
+    dashboard, New → Blueprint → point at this repo; Render provisions
+    `rankings-db` + `rankings-web` from `render.yaml`. (2) The site goes
+    live immediately but empty — no data exists yet. Run `cmd/migrate`,
+    `cmd/seed`, then `cmd/scrape`/`cmd/scrape-intermat`, then `cmd/resolve`
+    against the production `DATABASE_URL` (copied from Render's dashboard)
+    to populate it for real — same one-time bootstrap shape the local dev
+    DB already went through. (3) Add that same `DATABASE_URL` as a GitHub
+    Actions repo secret so `scrape.yml`/`aggregate-poll.yml` start actually
+    running instead of intentionally failing (no prod DB was the explicit
+    reason they were designed to fail loudly until now). (4) Register
+    ranklines.com (still unregistered, re-confirmed 2026-09-26) at any
+    registrar — Cloudflare Registrar sells at wholesale cost, a reasonable
+    default — then attach it as a custom domain on the `rankings-web`
+    service and follow Render's DNS instructions. (5) v1 item 8 (rename +
+    og:image/share meta) follows once the domain's live.
 ## Movement display
  
 - **Movement is per-weight.** _(decided 2026-07-02, with the web v0;
